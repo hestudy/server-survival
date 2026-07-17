@@ -491,3 +491,6 @@ const IT_TRANSLATIONS = {
     "campaign_chapter_3": "Capitolo 3: Difesa e Maestria",
     "campaign_locked": "Bloccato"
 };
+
+// Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.
+window.IT_TRANSLATIONS = IT_TRANSLATIONS;

@@ -109,3 +109,7 @@ const STATE = {
         failureReason: null,
     }
 };
+
+// Transitional global bridge (ADR-0002 expand step): shared with the other
+// legacy scripts, which still resolve this as a global.
+window.STATE = STATE;

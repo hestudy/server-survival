@@ -492,3 +492,6 @@ const RU_TRANSLATIONS = {
     "campaign_chapter_3": "Глава 3: Защита и мастерство",
     "campaign_locked": "Заблокировано"
 };
+
+// Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.
+window.RU_TRANSLATIONS = RU_TRANSLATIONS;

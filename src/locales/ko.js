@@ -451,3 +451,6 @@ const KO_TRANSLATIONS = {
     "campaign_chapter_3": "Chapter 3: Defense & Mastery",
     "campaign_locked": "Locked"
 };
+
+// Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.
+window.KO_TRANSLATIONS = KO_TRANSLATIONS;

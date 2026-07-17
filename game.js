@@ -4144,3 +4144,24 @@ container.addEventListener("touchcancel", () => {
     touchMode = null;
     touchHideHoverUI();
 });
+
+// Transitional global bridge (ADR-0002 expand step): these are referenced by
+// inline HTML handlers or by the src/ scripts, which still resolve them as
+// globals now that this file is loaded as an ES module.
+window.restartGame = restartGame;
+window.retryWithSameArchitecture = retryWithSameArchitecture;
+window.toggleAutoRepair = toggleAutoRepair;
+window.addInterventionWarning = addInterventionWarning;
+window.calculateFailChanceBasedOnLoad = calculateFailChanceBasedOnLoad;
+window.failRequest = failRequest;
+window.finishRequest = finishRequest;
+window.flashMoney = flashMoney;
+window.getUpkeepMultiplier = getUpkeepMultiplier;
+window.removeRequest = removeRequest;
+window.requestGroup = requestGroup;
+window.serviceGroup = serviceGroup;
+window.throttleRequest = throttleRequest;
+window.updateScore = updateScore;
+window.renderCampaignObjectives = renderCampaignObjectives;
+window.showCampaignDebrief = showCampaignDebrief;
+window.spawnRequest = spawnRequest;
