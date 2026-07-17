@@ -17,7 +17,7 @@ export function createWebInputSource(canvas) {
         },
 
         // Replay a synthetic mouse event into the same pipeline — used by
-        // the touch tap replay (M0 spike) and the live tooltip refresh.
+        // the M0 touch prototype's tap replay and the live tooltip refresh.
         replayMouse(channel, x, y) {
             canvas.dispatchEvent(
                 new MouseEvent(channel, {

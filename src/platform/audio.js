@@ -159,9 +159,12 @@ export class SoundService {
 // One-shot tool-feedback clicks, historical behavior kept intact: a fresh
 // element at full volume on every call, independent of the mute state and
 // the master gain pipeline.
+function playOneShot(file) {
+    new Audio(file).play();
+}
 export function playClickSfx() {
-    new Audio("assets/sounds/click-9.mp3").play();
+    playOneShot("assets/sounds/click-9.mp3");
 }
 export function playSelectSfx() {
-    new Audio("assets/sounds/click-5.mp3").play();
+    playOneShot("assets/sounds/click-5.mp3");
 }

@@ -33,7 +33,10 @@ This project uses vanilla JavaScript, HTML, and CSS with Three.js, built with Vi
     *   `main.js`: ES module entry — imports the legacy scripts in their original order.
     *   `three-global.js`: Bridges the npm Three.js package to the transitional `THREE` global.
     *   `entities/`: Game entities like `Service` and `Request`.
-    *   `services/`: Systems like `SoundService`.
+    *   `sim/`: Simulation core — pure game logic, no DOM/platform APIs.
+    *   `platform/`: Platform adapter layer — storage, audio and the raw
+        input event source live only here (see ADR-0002); includes the
+        layering test that enforces the boundary.
     *   `config.js`: Game configuration constants.
     *   `state.js`: Global game state.
 
