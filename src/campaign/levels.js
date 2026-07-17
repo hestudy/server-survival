@@ -525,3 +525,6 @@ const CAMPAIGN_LEVELS = [
         debriefTip: "Congratulations, Architect. You've mastered the basics of cloud system design. Now try Survival mode for the real grind.",
     },
 ];
+
+// Transitional global bridge (ADR-0002 expand step): read by campaign.js and game.js.
+window.CAMPAIGN_LEVELS = CAMPAIGN_LEVELS;

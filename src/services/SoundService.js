@@ -148,3 +148,6 @@ class SoundService {
         });
     }
 }
+
+// Transitional global bridge (ADR-0002 expand step): instantiated by game.js.
+window.SoundService = SoundService;

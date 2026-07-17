@@ -494,3 +494,8 @@ const CONFIG = {
     },
   },
 };
+
+// Transitional global bridge (ADR-0002 expand step): shared with the other
+// legacy scripts, which still resolve these as globals.
+window.TRAFFIC_TYPES = TRAFFIC_TYPES;
+window.CONFIG = CONFIG;

@@ -98,3 +98,6 @@ function renderArchitectureSVG(preBuilt, highlights = {}) {
     svg += '</svg>';
     return svg;
 }
+
+// Transitional global bridge (ADR-0002 expand step): called by game.js.
+window.renderArchitectureSVG = renderArchitectureSVG;

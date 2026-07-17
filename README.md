@@ -6,7 +6,7 @@
 
 Learn cloud by playing:
 
-[![PLAY NOW](https://img.shields.io/badge/PLAY_NOW-Server_Survival-2ea44f?style=for-the-badge)](https://pshenok.github.io/server-survival/)
+[![PLAY NOW](https://img.shields.io/badge/PLAY_NOW-Server_Survival-2ea44f?style=for-the-badge)](https://hestudy.github.io/server-survival/)
 
 ## How to Play
 
@@ -171,13 +171,20 @@ A fully customizable testing environment for experimenting with any architecture
 - **Core:** Vanilla JavaScript (ES6+)
 - **Rendering:** [Three.js](https://threejs.org/) for 3D visualization.
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) for the glassmorphism UI.
-- **Build:** No build step required! Just standard HTML/CSS/JS.
+- **Build:** [Vite](https://vitejs.dev/) — dependencies are locked npm packages (no CDNs); GitHub Actions builds and deploys to GitHub Pages (see ADR-0002).
 
 ## Getting Started
 
-1.  Clone the repository.
-2.  Open `index.html` in your modern web browser.
-3.  Start building your cloud empire!
+Requires [Node.js](https://nodejs.org/) 20+.
+
+```bash
+npm install
+npm run dev       # local dev server with hot reload
+npm run build     # production build into dist/
+npm run preview   # serve the production build locally
+```
+
+Then start building your cloud empire!
 
 ## Community
 

@@ -19,17 +19,19 @@ The following is a set of guidelines for contributing to Server Survival. These 
 
 ## Development Workflow
 
-This project uses vanilla JavaScript, HTML, and CSS with Three.js. No build step is currently required for the core game, but we use a modular structure in `src/`.
+This project uses vanilla JavaScript, HTML, and CSS with Three.js, built with Vite (see ADR-0002). Dependencies (Three.js, Tailwind CSS) are npm packages — there are no CDN references.
 
-1.  Open `index.html` in your browser to run the game.
-2.  Make changes in the `src/` directory or `game.js`.
-3.  Reload the browser to see your changes.
+1.  Run `npm install` once, then `npm run dev` and open the printed URL.
+2.  Make changes in the `src/` directory or `game.js` — the dev server hot-reloads.
+3.  `npm run build` produces the production bundle in `dist/` (deployed to GitHub Pages by CI).
 
 ### Project Structure
 
-*   `index.html`: Main entry point and UI structure.
+*   `index.html`: UI structure; loads the game via a single module script.
 *   `game.js`: Main game loop and logic (currently under refactoring).
 *   `src/`: Modularized code.
+    *   `main.js`: ES module entry — imports the legacy scripts in their original order.
+    *   `three-global.js`: Bridges the npm Three.js package to the transitional `THREE` global.
     *   `entities/`: Game entities like `Service` and `Request`.
     *   `services/`: Systems like `SoundService`.
     *   `config.js`: Game configuration constants.

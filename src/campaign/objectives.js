@@ -78,3 +78,6 @@ const CampaignObjectives = {
         return writes === 0 ? 0 : viaNosql / writes;
     },
 };
+
+// Transitional global bridge (ADR-0002 expand step): read by campaign/levels.js.
+window.CampaignObjectives = CampaignObjectives;
