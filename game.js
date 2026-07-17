@@ -3989,3 +3989,158 @@ function restoreConnections(savedConnections, internetConnections) {
         createConnection(connData.from, connData.to);
     });
 }
+
+// ==================== M0 TOUCH SPIKE (issue #2 — throwaway) ====================
+// Crudest possible touch support, bolted on only to validate on real phones
+// whether the connect/tower-defense gameplay works on a touchscreen at all:
+//   1-finger drag  = camera pan
+//   2-finger pinch = zoom (moving the midpoint also pans)
+//   tap            = replayed as a synthetic left-click so every existing
+//                    tool (select/connect/place/delete/unlink) works as-is.
+// No long-press "lift", no service dragging on touch — that is M2 scope.
+
+const TOUCH_TAP_SLOP_PX = 12; // finger drift allowed before a tap becomes a pan
+const TOUCH_TAP_MAX_MS = 500;
+
+let touchMode = null; // null | "tap?" | "pan" | "pinch"
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+let touchLastX = 0, touchLastY = 0;
+let pinchLastDist = 0, pinchLastMidX = 0, pinchLastMidY = 0;
+
+function touchPanCamera(dx, dy) {
+    // Track the finger ~1:1 (a drag should keep the map under the finger).
+    // Desktop mouse pan is damped by panSpeed=0.1; that feels broken-slow on
+    // touch. Frustum-based mapping — not exact on the tilted isometric ground
+    // plane, but close enough for the spike.
+    const panX = (-dx * (camera.right - camera.left)) / (window.innerWidth * camera.zoom);
+    const panY = (dy * (camera.top - camera.bottom)) / (window.innerHeight * camera.zoom);
+    camera.position.x += panX;
+    camera.position.z += panY;
+    if (isIsometric) {
+        cameraTarget.x += panX;
+        cameraTarget.z += panY;
+        camera.lookAt(cameraTarget);
+    } else {
+        camera.lookAt(camera.position.x, 0, camera.position.z);
+    }
+    camera.updateProjectionMatrix();
+}
+
+function touchHideHoverUI() {
+    lastPointerPos = null;
+    document.getElementById("tooltip").style.display = "none";
+}
+
+function touchSyntheticMouse(type, x, y) {
+    container.dispatchEvent(
+        new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            button: 0,
+        })
+    );
+}
+
+function touchPinchDist(t) {
+    return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+}
+
+container.addEventListener(
+    "touchstart",
+    (e) => {
+        e.preventDefault(); // suppress browser-emulated mouse events & scrolling
+        const t = e.touches;
+        if (t.length === 1) {
+            touchMode = "tap?";
+            touchStartX = touchLastX = t[0].clientX;
+            touchStartY = touchLastY = t[0].clientY;
+            touchStartTime = performance.now();
+        } else if (t.length >= 2) {
+            touchMode = "pinch";
+            pinchLastDist = touchPinchDist(t);
+            pinchLastMidX = (t[0].clientX + t[1].clientX) / 2;
+            pinchLastMidY = (t[0].clientY + t[1].clientY) / 2;
+            touchHideHoverUI();
+        }
+    },
+    { passive: false }
+);
+
+container.addEventListener(
+    "touchmove",
+    (e) => {
+        e.preventDefault();
+        const t = e.touches;
+        if (touchMode === "pinch" && t.length >= 2) {
+            const dist = touchPinchDist(t);
+            if (pinchLastDist > 0) {
+                currentZoom = Math.max(
+                    minZoom,
+                    Math.min(maxZoom, currentZoom * (dist / pinchLastDist))
+                );
+                camera.zoom = currentZoom;
+                camera.updateProjectionMatrix();
+            }
+            const midX = (t[0].clientX + t[1].clientX) / 2;
+            const midY = (t[0].clientY + t[1].clientY) / 2;
+            touchPanCamera(midX - pinchLastMidX, midY - pinchLastMidY);
+            pinchLastDist = dist;
+            pinchLastMidX = midX;
+            pinchLastMidY = midY;
+            return;
+        }
+        if (t.length !== 1 || touchMode === null) return;
+        const x = t[0].clientX;
+        const y = t[0].clientY;
+        if (
+            touchMode === "tap?" &&
+            Math.hypot(x - touchStartX, y - touchStartY) > TOUCH_TAP_SLOP_PX
+        ) {
+            touchMode = "pan";
+            touchHideHoverUI();
+        }
+        if (touchMode === "pan") {
+            touchPanCamera(x - touchLastX, y - touchLastY);
+        }
+        touchLastX = x;
+        touchLastY = y;
+    },
+    { passive: false }
+);
+
+container.addEventListener(
+    "touchend",
+    (e) => {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+            // Fingers remain (pinch → one finger): re-anchor as a pan so the
+            // leftover finger doesn't register a huge jump or a bogus tap.
+            if (e.touches.length === 1) {
+                touchMode = "pan";
+                touchLastX = e.touches[0].clientX;
+                touchLastY = e.touches[0].clientY;
+            }
+            return;
+        }
+        if (
+            touchMode === "tap?" &&
+            performance.now() - touchStartTime <= TOUCH_TAP_MAX_MS
+        ) {
+            // Replay the tap through the existing mouse pipeline. mousemove goes
+            // first so hover-only feedback (tooltips, unlink highlight, upgrade
+            // indicator) also appears on tap.
+            touchSyntheticMouse("mousemove", touchLastX, touchLastY);
+            touchSyntheticMouse("mousedown", touchLastX, touchLastY);
+            touchSyntheticMouse("mouseup", touchLastX, touchLastY);
+        }
+        touchMode = null;
+    },
+    { passive: false }
+);
+
+container.addEventListener("touchcancel", () => {
+    touchMode = null;
+    touchHideHoverUI();
+});

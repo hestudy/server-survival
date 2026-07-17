@@ -10,6 +10,24 @@ body {
 #canvas-container {
   width: 100vw;
   height: 100vh;
+  /* M0 touch spike (issue #2): stop browser pan/zoom from eating canvas gestures */
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+/* M0 touch spike (issue #2): the bottom toolbar is ~1400px of fixed-width
+   buttons; on narrow screens it gets clipped on both sides with no way to
+   reach the build buttons. Let it scroll horizontally. Desktop (>=1024px)
+   is deliberately left untouched. */
+@media (max-width: 1023px) {
+  #bottom-toolbar {
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #bottom-toolbar > * {
+    flex-shrink: 0;
+  }
 }
 
 /* Glassmorphism UI */
