@@ -8,6 +8,7 @@ import {
 import { storage } from "./src/platform/storage.js";
 import { SoundService, playClickSfx, playSelectSfx } from "./src/platform/audio.js";
 import { createWebInputSource } from "./src/platform/input.js";
+import { createGestureRecognizer } from "./src/input/gestures.js";
 
 STATE.sound = new SoundService();
 
@@ -811,9 +812,10 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-let isPanning = false;
-let lastMouseX = 0;
-let lastMouseY = 0;
+// Latched when a pan intent starts while a game is running — mirrors the
+// old isPanning flag, but the raw-event bookkeeping now lives in the
+// gesture recognizer.
+let panActive = false;
 const panSpeed = 0.1;
 
 function resetGame(mode = "survival") {
@@ -1934,9 +1936,16 @@ const zoomSpeed = 0.001;
 
 input.on("wheel", (e) => {
     e.preventDefault();
+    gestures.handle({
+        type: "wheel",
+        x: e.clientX,
+        y: e.clientY,
+        deltaY: e.deltaY,
+    });
+}, { passive: false });
 
-    // Zoom logic
-    const zoomDelta = e.deltaY * -zoomSpeed;
+function handleZoomIntent({ deltaY }) {
+    const zoomDelta = deltaY * -zoomSpeed;
     const newZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom + zoomDelta));
 
     if (newZoom !== currentZoom) {
@@ -1947,7 +1956,7 @@ input.on("wheel", (e) => {
         camera.zoom = currentZoom;
         camera.updateProjectionMatrix();
     }
-}, { passive: false });
+}
 
 // Upgrade Indicator Logic
 // Upgrade Indicator Logic
@@ -2027,21 +2036,66 @@ input.on("blur", () => {
 
 input.on("contextmenu", (e) => e.preventDefault());
 
+// ---- Gesture recognition wiring (issue #8) ----
+// Raw pointer events from the platform adapter are normalized into semantic
+// intents by the gesture recognizer (src/input/gestures.js). Mouse intents
+// reproduce the pre-recognizer desktop behavior verbatim (桌面冻结); touch
+// intents implement the M2 gesture system: tap = 点选 (select + live detail
+// tooltip), single-finger drag = camera pan, two-finger pinch = zoom.
+// Long-press 抬起 (lift) is recognized and tested inside the gesture layer
+// but stays disabled here until the move-service issue lands — a
+// single-finger drag must never move a service.
+const gestures = createGestureRecognizer(
+    {
+        onPress: handlePressIntent,
+        onDrag: handleDragIntent,
+        onRelease: handleReleaseIntent,
+        onHover: handleHoverIntent,
+        onHoverEnd: handleHoverEndIntent,
+        onPanStart: handlePanStartIntent,
+        onPan: handlePanIntent,
+        onPanEnd: handlePanEndIntent,
+        onTap: handleTapIntent,
+        onPinchStart: handlePinchStartIntent,
+        onPinch: handlePinchIntent,
+        onZoom: handleZoomIntent,
+        onCancel: handleTouchCancelIntent,
+    },
+    { longPressEnabled: false }
+);
+
 input.on("mousedown", (e) => {
+    gestures.handle({
+        type: "mouse-down",
+        x: e.clientX,
+        y: e.clientY,
+        button: e.button,
+    });
+    // handle() is synchronous, so a node drag started by the press intent is
+    // already visible here. Same preventDefault coverage as before the
+    // recognizer: pan buttons and drag starts.
+    if (STATE.isRunning && (e.button === 1 || e.button === 2 || isDraggingNode)) {
+        e.preventDefault();
+    }
+});
+
+function handleTapIntent({ x, y }) {
+    // Replay the tap through the mouse pipeline (hover first so the live
+    // detail tooltip — capacity, health, repair cost — appears, then
+    // press + release so every tool acts exactly like a desktop click).
+    // The hover step also sets lastPointerPos, which is what keeps the
+    // tooltip's stats live afterwards: the animate loop replays a mousemove
+    // at that position ~4x/s (see the #173 block) until a pan/pinch hides it.
+    handleHoverIntent({ x, y });
+    handlePressIntent({ x, y });
+    handleReleaseIntent({ x, y });
+}
+
+function handlePressIntent({ x, y }) {
     if (!STATE.isRunning) return;
 
-    if (e.button === 2 || e.button === 1) {
-        isPanning = true;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-        container.style.cursor = "grabbing";
-        e.preventDefault();
-        return;
-    }
-
-    const i = getIntersect(e.clientX, e.clientY);
+    const i = getIntersect(x, y);
     if (STATE.activeTool === "select") {
-        const i = getIntersect(e.clientX, e.clientY);
         if (i.type === "service") {
             const svc = STATE.services.find((s) => s.id === i.id);
             // Use criticalHealth from config for consistency
@@ -2064,18 +2118,17 @@ input.on("mousedown", (e) => {
         if (draggedNode) {
             isDraggingNode = true;
             dragStartPos.copy(draggedNode.position);
-            const hit = getIntersect(e.clientX, e.clientY);
+            const hit = getIntersect(x, y);
             if (hit.pos) {
                 dragOffset.copy(draggedNode.position).sub(hit.pos);
             }
             container.style.cursor = "grabbing";
-            e.preventDefault();
             return;
         }
     } else if (STATE.activeTool === "delete" && i.type === "service")
         deleteObject(i.id);
     else if (STATE.activeTool === "unlink") {
-        const conn = getConnectionAtPoint(e.clientX, e.clientY);
+        const conn = getConnectionAtPoint(x, y);
         if (conn) {
             deleteConnection(conn.from, conn.to);
         } else {
@@ -2145,20 +2198,92 @@ input.on("mousedown", (e) => {
             }
         }
     }
-});
+}
 
 // Last known pointer position over the canvas — lets the animate loop
 // refresh the hover tooltip in real time while the mouse is stationary (#173).
 let lastPointerPos = null;
 let tooltipRefreshAcc = 0;
 input.on("mouseleave", () => {
-    lastPointerPos = null;
+    gestures.handle({ type: "mouse-leave" });
 });
 
 input.on("mousemove", (e) => {
-    lastPointerPos = { x: e.clientX, y: e.clientY };
+    gestures.handle({ type: "mouse-move", x: e.clientX, y: e.clientY });
+});
+
+function handleHoverEndIntent() {
+    lastPointerPos = null;
+}
+
+function handlePanStartIntent({ pointerType }) {
+    if (!STATE.isRunning) return;
+    panActive = true;
+    if (pointerType === "mouse") {
+        container.style.cursor = "grabbing";
+    } else {
+        touchHideHoverUI();
+    }
+}
+
+function handlePanIntent({ dx, dy, pointerType }) {
+    if (!panActive) return;
+    if (pointerType === "touch") {
+        touchPanCamera(dx, dy);
+        return;
+    }
+
+    const panX =
+        ((-dx * (camera.right - camera.left)) / window.innerWidth) * panSpeed;
+    const panY =
+        ((dy * (camera.top - camera.bottom)) / window.innerHeight) * panSpeed;
+
+    if (isIsometric) {
+        camera.position.x += panX;
+        camera.position.z += panY;
+        cameraTarget.x += panX;
+        cameraTarget.z += panY;
+        camera.lookAt(cameraTarget);
+    } else {
+        camera.position.x += panX;
+        camera.position.z += panY;
+        camera.lookAt(camera.position.x, 0, camera.position.z);
+    }
+    camera.updateProjectionMatrix();
+    document.getElementById("tooltip").style.display = "none";
+}
+
+function handlePanEndIntent({ pointerType }) {
+    panActive = false;
+    if (pointerType === "mouse") {
+        container.style.cursor = "default";
+    }
+}
+
+function handlePinchStartIntent() {
+    touchHideHoverUI();
+}
+
+function handlePinchIntent({ scale, dx, dy }) {
+    // Zoom mirrors the desktop wheel (no isRunning gate); the midpoint pan
+    // mirrors the single-finger pan, which is gated like the mouse pan.
+    currentZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom * scale));
+    camera.zoom = currentZoom;
+    camera.updateProjectionMatrix();
+    if (STATE.isRunning) touchPanCamera(dx, dy);
+}
+
+function handleTouchCancelIntent() {
+    touchHideHoverUI();
+}
+
+// Mouse move with the left button held: an in-flight node drag wins, then an
+// active right/middle pan, then plain hover — the same priority chain the raw
+// mousemove handler used before the recognizer.
+function handleDragIntent({ x, y, dx, dy }) {
+    lastPointerPos = { x, y };
     if (isDraggingNode && draggedNode) {
-        const hit = getIntersect(e.clientX, e.clientY);
+        const hit = getIntersect(x, y);
         if (hit.pos) {
             const newPos = hit.pos.clone().add(dragOffset);
             newPos.y = 0;
@@ -2181,34 +2306,20 @@ input.on("mousemove", (e) => {
         }
         return;
     }
-    if (isPanning) {
-        const dx = e.clientX - lastMouseX;
-        const dy = e.clientY - lastMouseY;
-
-        const panX =
-            ((-dx * (camera.right - camera.left)) / window.innerWidth) * panSpeed;
-        const panY =
-            ((dy * (camera.top - camera.bottom)) / window.innerHeight) * panSpeed;
-
-        if (isIsometric) {
-            camera.position.x += panX;
-            camera.position.z += panY;
-            cameraTarget.x += panX;
-            cameraTarget.z += panY;
-            camera.lookAt(cameraTarget);
-        } else {
-            camera.position.x += panX;
-            camera.position.z += panY;
-            camera.lookAt(camera.position.x, 0, camera.position.z);
-        }
-        camera.updateProjectionMatrix();
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-        document.getElementById("tooltip").style.display = "none";
+    if (panActive) {
+        handlePanIntent({ dx, dy, pointerType: "mouse" });
         return;
     }
+    handleHoverAt(x, y);
+}
 
-    const i = getIntersect(e.clientX, e.clientY);
+function handleHoverIntent({ x, y }) {
+    lastPointerPos = { x, y };
+    handleHoverAt(x, y);
+}
+
+function handleHoverAt(x, y) {
+    const i = getIntersect(x, y);
     const t = document.getElementById("tooltip");
     let cursor = "default";
 
@@ -2221,7 +2332,7 @@ input.on("mousemove", (e) => {
 
     // Handle unlink tool hover
     if (STATE.activeTool === "unlink") {
-        const conn = getConnectionAtPoint(e.clientX, e.clientY);
+        const conn = getConnectionAtPoint(x, y);
         if (conn) {
             cursor = "pointer";
             // Highlight the connection in red
@@ -2244,8 +2355,8 @@ input.on("mousemove", (e) => {
                 conn.to === "internet" ? i18n.t('internet') : to?.config?.name || i18n.t('unknown');
 
             showTooltip(
-                e.clientX + 15,
-                e.clientY + 15,
+                x + 15,
+                y + 15,
                 `<strong class="text-orange-400">${i18n.t('remove_link')}</strong><br>
                 <span class="text-gray-300">${fromName}</span> → <span class="text-gray-300">${toName}</span><br>
                 <span class="text-red-400 text-xs">${i18n.t('click_to_remove')}</span>`
@@ -2401,7 +2512,7 @@ input.on("mousemove", (e) => {
                 }
             }
 
-            showTooltip(e.clientX + 15, e.clientY + 15, content);
+            showTooltip(x + 15, y + 15, content);
 
             // Reset previous highlights
             STATE.services.forEach((svc) => {
@@ -2428,7 +2539,7 @@ input.on("mousemove", (e) => {
     }
 
     container.style.cursor = cursor;
-});
+}
 
         // clear failure list
         document.getElementById('clear-all').addEventListener('click',()=>{
@@ -2486,10 +2597,15 @@ function setupUITooltips() {
 setupUITooltips();
 
 input.on("mouseup", (e) => {
-    if (e.button === 2 || e.button === 1) {
-        isPanning = false;
-        container.style.cursor = "default";
-    }
+    gestures.handle({
+        type: "mouse-up",
+        x: e.clientX,
+        y: e.clientY,
+        button: e.button,
+    });
+});
+
+function handleReleaseIntent() {
     if (isDraggingNode && draggedNode) {
         isDraggingNode = false;
 
@@ -2521,9 +2637,8 @@ input.on("mouseup", (e) => {
 
         draggedNode = null;
         container.style.cursor = "default";
-        return;
     }
-});
+}
 
 function updateConnectionsForNode(nodeId) {
     STATE.connections.forEach((c) => {
@@ -2741,7 +2856,7 @@ function animate(time) {
     tooltipRefreshAcc += clampedDt;
     if (tooltipRefreshAcc >= 0.25) {
         tooltipRefreshAcc = 0;
-        if (lastPointerPos && !isDraggingNode && !isPanning) {
+        if (lastPointerPos && !isDraggingNode && !panActive) {
             const tooltipEl = document.getElementById("tooltip");
             if (tooltipEl && tooltipEl.style.display === "block") {
                 input.replayMouse("mousemove", lastPointerPos.x, lastPointerPos.y);
@@ -3452,28 +3567,19 @@ function clearCurrentGame() {
     STATE.internetNode.connections = [];
 }
 
-// ==================== M0 TOUCH SPIKE (issue #2 — throwaway) ====================
-// Crudest possible touch support, bolted on only to validate on real phones
-// whether the connect/tower-defense gameplay works on a touchscreen at all:
-//   1-finger drag  = camera pan
-//   2-finger pinch = zoom (moving the midpoint also pans)
-//   tap            = replayed as a synthetic left-click so every existing
-//                    tool (select/connect/place/delete/unlink) works as-is.
-// No long-press "lift", no service dragging on touch — that is M2 scope.
-
-const TOUCH_TAP_SLOP_PX = 12; // finger drift allowed before a tap becomes a pan
-const TOUCH_TAP_MAX_MS = 500;
-
-let touchMode = null; // null | "tap?" | "pan" | "pinch"
-let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
-let touchLastX = 0, touchLastY = 0;
-let pinchLastDist = 0, pinchLastMidX = 0, pinchLastMidY = 0;
+// ==================== M2 TOUCH WIRING (issue #8) ====================
+// Touch flows through the same gesture recognizer as the mouse
+// (src/input/gestures.js); the M0 throwaway spike is gone. Read-only camera
+// interactions for this issue: tap = 点选 (select + live detail tooltip),
+// single-finger drag = camera pan, two-finger pinch = zoom (moving the
+// midpoint also pans). A single-finger drag never moves a service — the
+// long-press 抬起 flow ships with the move-service issue.
 
 function touchPanCamera(dx, dy) {
     // Track the finger ~1:1 (a drag should keep the map under the finger).
     // Desktop mouse pan is damped by panSpeed=0.1; that feels broken-slow on
     // touch. Frustum-based mapping — not exact on the tilted isometric ground
-    // plane, but close enough for the spike.
+    // plane, but close enough in practice (validated on device during M0).
     const panX = (-dx * (camera.right - camera.left)) / (window.innerWidth * camera.zoom);
     const panY = (dy * (camera.top - camera.bottom)) / (window.innerHeight * camera.zoom);
     camera.position.x += panX;
@@ -3493,111 +3599,23 @@ function touchHideHoverUI() {
     document.getElementById("tooltip").style.display = "none";
 }
 
-function touchSyntheticMouse(type, x, y) {
-    input.replayMouse(type, x, y);
+function touchPoints(e) {
+    const points = [];
+    for (let i = 0; i < e.touches.length; i++) {
+        points.push({ x: e.touches[i].clientX, y: e.touches[i].clientY });
+    }
+    return points;
 }
 
-function touchPinchDist(t) {
-    return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+function feedTouch(type, e) {
+    e.preventDefault(); // suppress browser-emulated mouse events & scrolling
+    gestures.handle({ type, touches: touchPoints(e), time: performance.now() });
 }
 
-input.on(
-    "touchstart",
-    (e) => {
-        e.preventDefault(); // suppress browser-emulated mouse events & scrolling
-        const t = e.touches;
-        if (t.length === 1) {
-            touchMode = "tap?";
-            touchStartX = touchLastX = t[0].clientX;
-            touchStartY = touchLastY = t[0].clientY;
-            touchStartTime = performance.now();
-        } else if (t.length >= 2) {
-            touchMode = "pinch";
-            pinchLastDist = touchPinchDist(t);
-            pinchLastMidX = (t[0].clientX + t[1].clientX) / 2;
-            pinchLastMidY = (t[0].clientY + t[1].clientY) / 2;
-            touchHideHoverUI();
-        }
-    },
-    { passive: false }
-);
-
-input.on(
-    "touchmove",
-    (e) => {
-        e.preventDefault();
-        const t = e.touches;
-        if (touchMode === "pinch" && t.length >= 2) {
-            const dist = touchPinchDist(t);
-            if (pinchLastDist > 0) {
-                currentZoom = Math.max(
-                    minZoom,
-                    Math.min(maxZoom, currentZoom * (dist / pinchLastDist))
-                );
-                camera.zoom = currentZoom;
-                camera.updateProjectionMatrix();
-            }
-            const midX = (t[0].clientX + t[1].clientX) / 2;
-            const midY = (t[0].clientY + t[1].clientY) / 2;
-            touchPanCamera(midX - pinchLastMidX, midY - pinchLastMidY);
-            pinchLastDist = dist;
-            pinchLastMidX = midX;
-            pinchLastMidY = midY;
-            return;
-        }
-        if (t.length !== 1 || touchMode === null) return;
-        const x = t[0].clientX;
-        const y = t[0].clientY;
-        if (
-            touchMode === "tap?" &&
-            Math.hypot(x - touchStartX, y - touchStartY) > TOUCH_TAP_SLOP_PX
-        ) {
-            touchMode = "pan";
-            touchHideHoverUI();
-        }
-        if (touchMode === "pan") {
-            touchPanCamera(x - touchLastX, y - touchLastY);
-        }
-        touchLastX = x;
-        touchLastY = y;
-    },
-    { passive: false }
-);
-
-input.on(
-    "touchend",
-    (e) => {
-        e.preventDefault();
-        if (e.touches.length > 0) {
-            // Fingers remain (pinch → one finger): re-anchor as a pan so the
-            // leftover finger doesn't register a huge jump or a bogus tap.
-            if (e.touches.length === 1) {
-                touchMode = "pan";
-                touchLastX = e.touches[0].clientX;
-                touchLastY = e.touches[0].clientY;
-            }
-            return;
-        }
-        if (
-            touchMode === "tap?" &&
-            performance.now() - touchStartTime <= TOUCH_TAP_MAX_MS
-        ) {
-            // Replay the tap through the existing mouse pipeline. mousemove goes
-            // first so hover-only feedback (tooltips, unlink highlight, upgrade
-            // indicator) also appears on tap.
-            touchSyntheticMouse("mousemove", touchLastX, touchLastY);
-            touchSyntheticMouse("mousedown", touchLastX, touchLastY);
-            touchSyntheticMouse("mouseup", touchLastX, touchLastY);
-        }
-        touchMode = null;
-    },
-    { passive: false }
-);
-
-input.on("touchcancel", () => {
-    touchMode = null;
-    touchHideHoverUI();
-});
+input.on("touchstart", (e) => feedTouch("touch-start", e), { passive: false });
+input.on("touchmove", (e) => feedTouch("touch-move", e), { passive: false });
+input.on("touchend", (e) => feedTouch("touch-end", e), { passive: false });
+input.on("touchcancel", () => gestures.handle({ type: "touch-cancel" }));
 
 // Transitional global bridge (ADR-0002 expand step): these are referenced by
 // inline HTML handlers or by the src/ scripts, which still resolve them as
