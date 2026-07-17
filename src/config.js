@@ -496,6 +496,11 @@ const CONFIG = {
 };
 
 // Transitional global bridge (ADR-0002 expand step): shared with the other
-// legacy scripts, which still resolve these as globals.
-window.TRAFFIC_TYPES = TRAFFIC_TYPES;
-window.CONFIG = CONFIG;
+// legacy scripts, which still resolve these as globals. Guarded so the
+// simulation core can import this file headless (Node/Vitest, no window).
+if (typeof window !== "undefined") {
+    window.TRAFFIC_TYPES = TRAFFIC_TYPES;
+    window.CONFIG = CONFIG;
+}
+
+export { TRAFFIC_TYPES, CONFIG };
