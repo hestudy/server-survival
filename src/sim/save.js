@@ -101,6 +101,8 @@ export function buildSaveData({ timestamp, state = {}, world }) {
         score: { ...economy.score },
         failures: { ...economy.failures },
         finances: economy.finances,
+        upkeepEnabled: economy.upkeepEnabled,
+        autoRepairEnabled: economy.autoRepairEnabled,
         elapsedGameTime: world.time,
         trafficDistribution: { ...world.trafficDistribution },
         services: world.services.map(serializeService),
@@ -150,6 +152,10 @@ export function restoreEconomy(economy, saveData) {
     economy.money = saveData.money || 0;
     economy.reputation = saveData.reputation || 100;
     economy.score = { ...saveData.score };
+    // Maintenance state (维护费状态), with the defaulting rules the web
+    // loader has always applied.
+    economy.upkeepEnabled = saveData.upkeepEnabled !== false;
+    economy.autoRepairEnabled = saveData.autoRepairEnabled || false;
 
     const defaults = defaultFinances();
     economy.finances = saveData.finances

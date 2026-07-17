@@ -2,6 +2,14 @@
 // schema. The localStorage key and the on-disk format must stay exactly what
 // the pre-refactor web layer wrote — old saves keep loading, new saves stay
 // loadable by shape. Round-trip: serialize → deserialize → same world.
+//
+// fixtures/save-v2-prerefactor.json is a REAL pre-refactor save: captured by
+// running the pre-M1-c build (commit 5c3f0f8) headless in Chromium, playing
+// ~15s of survival on a seeded architecture, and dumping what its own
+// saveGameState wrote to localStorage — old random service ids, the
+// serialized internetNode meshes, sound-service junk and all.
+// fixtures/save-v1-legacy.json reconstructs the WEB/API/FRAUD era (which
+// predates this repo's history) from the migrateOldSave contract.
 import { describe, expect, it } from "vitest";
 import {
     SAVE_KEY,
@@ -52,10 +60,11 @@ describe("save format contract", () => {
 
     it("produces the pre-refactor payload shape", () => {
         const { world, waf } = makePlayedWorld();
+        world.economy.autoRepairEnabled = true;
 
         const saveData = buildSaveData({
             timestamp: 1752700000000,
-            state: { activeTool: "select", gameMode: "survival", autoRepairEnabled: true },
+            state: { activeTool: "select", gameMode: "survival" },
             world,
         });
 
@@ -129,11 +138,15 @@ describe("save round-trip (serialize → deserialize → same state)", () => {
         for (const [i, s] of restored.services.entries()) {
             expect(s.connections).toEqual(source.world.services[i].connections);
         }
-        // Economy state survives.
+        // Economy state survives, maintenance flags included.
         expect(restored.economy.money).toBe(source.economy.money);
         expect(restored.economy.reputation).toBe(source.economy.reputation);
         expect(restored.economy.score).toEqual(source.economy.score);
         expect(restored.economy.finances).toEqual(source.economy.finances);
+        expect(restored.economy.upkeepEnabled).toBe(false);
+        expect(restored.economy.autoRepairEnabled).toBe(
+            source.economy.autoRepairEnabled
+        );
         expect(restored.trafficDistribution).toEqual(
             source.world.trafficDistribution
         );
@@ -166,7 +179,9 @@ describe("backward compatibility with pre-refactor saves", () => {
         const { world } = makeWorld();
         restoreWorld(world, normalizeSave(load(v2PreRefactor)));
 
-        expect(world.services).toHaveLength(6);
+        expect(world.services.map((s) => [s.id, s.type, s.tier])).toEqual(
+            v2PreRefactor.services.map((s) => [s.id, s.type, s.tier])
+        );
         expect(world.services.map((s) => s.id)).toContain("svc_a8k2j9x4q");
         // Tiered services get their tier configs reapplied.
         const compute = world.services.find((s) => s.type === "compute");
@@ -176,20 +191,14 @@ describe("backward compatibility with pre-refactor saves", () => {
         expect(db.tier).toBe(3);
         expect(db.config.capacity).toBe(35);
         // Entry points restored in order (WAF first, CDN second).
-        expect(world.internet.connections).toEqual([
-            "svc_a8k2j9x4q",
-            "svc_p3m7n1c5d",
-        ]);
-        // Economy restored.
-        expect(world.economy.money).toBe(312.4567);
-        expect(world.economy.reputation).toBe(87.3);
-        expect(world.economy.score).toEqual({
-            total: 693,
-            storage: 210,
-            database: 385,
-            maliciousBlocked: 98,
-        });
-        expect(world.time).toBe(254.8);
+        expect(world.internet.connections).toEqual(
+            v2PreRefactor.internetConnections
+        );
+        // Economy restored to exactly what the old game had banked.
+        expect(world.economy.money).toBe(v2PreRefactor.money);
+        expect(world.economy.reputation).toBe(v2PreRefactor.reputation);
+        expect(world.economy.score).toEqual(v2PreRefactor.score);
+        expect(world.time).toBe(v2PreRefactor.elapsedGameTime);
 
         // Old random-format ids must not confuse the id sequence.
         const fresh = world.addService("cache");
@@ -239,9 +248,9 @@ describe("historical regressions", () => {
         restoreWorld(world, normalizeSave(load(v2PreRefactor)));
 
         expect(world.economy.finances).toEqual(v2PreRefactor.finances);
-        // Maintenance state travels in the payload for the web layer.
-        expect(v2PreRefactor.autoRepairEnabled).toBe(true);
-        expect(v2PreRefactor.upkeepEnabled).toBe(true);
+        // Maintenance state (维护费状态) restores through seam 1 too.
+        expect(world.economy.autoRepairEnabled).toBe(true);
+        expect(world.economy.upkeepEnabled).toBe(true);
 
         // …and a fresh save written from the restored world still carries it.
         const resaved = buildSaveData({
@@ -279,6 +288,8 @@ describe("historical regressions", () => {
 
         expect(world.economy.finances.expenses.mitigation).toBe(0);
         expect(world.economy.finances.expenses.breach).toBe(0);
-        expect(world.economy.finances.expenses.upkeep).toBe(61.2345);
+        expect(world.economy.finances.expenses.upkeep).toBe(
+            v2PreRefactor.finances.expenses.upkeep
+        );
     });
 });

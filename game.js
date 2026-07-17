@@ -3612,7 +3612,6 @@ function loadGameState(saveData = null) {
 
         STATE.gameMode = saveData.gameMode || "survival";
         STATE.sandboxBudget = saveData.sandboxBudget || 2000;
-        STATE.upkeepEnabled = saveData.upkeepEnabled !== false;
         STATE.burstCount = saveData.burstCount || 10;
         STATE.gameStarted = saveData.gameStarted || true;
         STATE.previousTimeScale = saveData.previousTimeScale || 1;
@@ -3637,8 +3636,9 @@ function loadGameState(saveData = null) {
             STATE.maliciousSpikeTimer = 0;
             STATE.maliciousSpikeActive = false;
             STATE.normalTrafficDist = null;
-            STATE.autoRepairEnabled = saveData.autoRepairEnabled || false;
         }
+        // upkeepEnabled / autoRepairEnabled (维护费状态) restore with the
+        // economy in restoreWorld below.
 
         // Sim-owned state — economy books (money/reputation/score/finances,
         // with zeroed-ledger defaults for saves that predate finance

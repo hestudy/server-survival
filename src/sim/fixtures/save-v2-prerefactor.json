@@ -1,52 +1,286 @@
 {
-  "timestamp": 1752700000000,
+  "timestamp": 1784299978315,
   "version": "2.0",
-  "money": 312.4567,
-  "reputation": 87.3,
-  "requestsProcessed": 142,
-  "score": { "total": 693, "storage": 210, "database": 385, "maliciousBlocked": 98 },
-  "failures": { "STATIC": 1, "READ": 2, "WRITE": 0, "UPLOAD": 0, "SEARCH": 1, "MALICIOUS": 2 },
+  "money": 507.1240830097125,
+  "reputation": 99.79999999999956,
+  "requestsProcessed": 118,
+  "score": {
+    "total": 749,
+    "storage": 176,
+    "database": 303,
+    "maliciousBlocked": 270
+  },
+  "failures": {
+    "STATIC": 0,
+    "READ": 0,
+    "WRITE": 0,
+    "UPLOAD": 0,
+    "SEARCH": 0,
+    "MALICIOUS": 0
+  },
   "activeTool": "select",
   "selectedNodeId": null,
-  "lastTime": 84123.5,
-  "spawnTimer": 0.31,
-  "currentRPS": 3.7,
-  "timeScale": 1,
+  "connections": [
+    {
+      "from": "internet",
+      "to": "svc_a8k2j9x4q"
+    },
+    {
+      "from": "internet",
+      "to": "svc_p3m7n1c5d"
+    },
+    {
+      "from": "svc_a8k2j9x4q",
+      "to": "svc_f6t2h8b3m"
+    },
+    {
+      "from": "svc_f6t2h8b3m",
+      "to": "svc_k5j3l7d9s"
+    },
+    {
+      "from": "svc_f6t2h8b3m",
+      "to": "svc_w9r4y6u1e"
+    },
+    {
+      "from": "svc_k5j3l7d9s",
+      "to": "svc_c7v3b5n8m"
+    },
+    {
+      "from": "svc_k5j3l7d9s",
+      "to": "svc_v2b8n4m6x"
+    },
+    {
+      "from": "svc_k5j3l7d9s",
+      "to": "svc_z1q9w4e7r"
+    },
+    {
+      "from": "svc_w9r4y6u1e",
+      "to": "svc_v2b8n4m6x"
+    },
+    {
+      "from": "svc_w9r4y6u1e",
+      "to": "svc_z1q9w4e7r"
+    },
+    {
+      "from": "svc_c7v3b5n8m",
+      "to": "svc_v2b8n4m6x"
+    },
+    {
+      "from": "svc_c7v3b5n8m",
+      "to": "svc_z1q9w4e7r"
+    },
+    {
+      "from": "svc_p3m7n1c5d",
+      "to": "svc_z1q9w4e7r"
+    }
+  ],
+  "lastTime": 15825,
+  "spawnTimer": 0.03939383324372252,
+  "currentRPS": 10.09365712050393,
+  "timeScale": 0,
   "isRunning": true,
-  "animationId": 512,
+  "animationId": 319,
   "internetNode": {
     "id": "internet",
     "type": "internet",
-    "position": { "x": -40, "y": 0, "z": 0 },
-    "connections": ["svc_a8k2j9x4q", "svc_p3m7n1c5d"]
+    "position": {
+      "x": -40,
+      "y": 0,
+      "z": 0
+    },
+    "connections": [
+      "svc_a8k2j9x4q",
+      "svc_p3m7n1c5d"
+    ],
+    "mesh": {
+      "metadata": {
+        "version": 4.5,
+        "type": "Object",
+        "generator": "Object3D.toJSON"
+      },
+      "geometries": [
+        {
+          "uuid": "4A3D2622-7922-4DA4-BB61-D21B31DF0927",
+          "type": "BoxGeometry",
+          "width": 6,
+          "height": 1,
+          "depth": 10,
+          "widthSegments": 1,
+          "heightSegments": 1,
+          "depthSegments": 1
+        }
+      ],
+      "materials": [
+        {
+          "uuid": "B5BE6C66-46C0-4D62-82EB-2DC56A4C7292",
+          "type": "MeshStandardMaterial",
+          "color": 1118481,
+          "roughness": 0.2,
+          "metalness": 0,
+          "emissive": 65535,
+          "emissiveIntensity": 0.7,
+          "envMapIntensity": 1,
+          "refractionRatio": 0.98,
+          "depthFunc": 3,
+          "depthTest": true,
+          "depthWrite": true,
+          "colorWrite": true,
+          "stencilWrite": false,
+          "stencilWriteMask": 255,
+          "stencilFunc": 519,
+          "stencilRef": 0,
+          "stencilFuncMask": 255,
+          "stencilFail": 7680,
+          "stencilZFail": 7680,
+          "stencilZPass": 7680
+        }
+      ],
+      "object": {
+        "uuid": "60BECA67-81AA-45B5-977A-89DEDEFD4184",
+        "type": "Mesh",
+        "castShadow": true,
+        "receiveShadow": true,
+        "layers": 1,
+        "matrix": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -40,
+          0,
+          0,
+          1
+        ],
+        "geometry": "4A3D2622-7922-4DA4-BB61-D21B31DF0927",
+        "material": "B5BE6C66-46C0-4D62-82EB-2DC56A4C7292"
+      }
+    },
+    "ring": {
+      "metadata": {
+        "version": 4.5,
+        "type": "Object",
+        "generator": "Object3D.toJSON"
+      },
+      "geometries": [
+        {
+          "uuid": "A82AF70E-2364-4C9B-A322-B4E7C80CA918",
+          "type": "RingGeometry",
+          "innerRadius": 7,
+          "outerRadius": 7.2,
+          "thetaSegments": 32,
+          "phiSegments": 1,
+          "thetaStart": 0,
+          "thetaLength": 6.283185307179586
+        }
+      ],
+      "materials": [
+        {
+          "uuid": "EC0B6009-1CD0-4C1F-AA6D-62A3BD84CCE3",
+          "type": "MeshStandardMaterial",
+          "color": 65535,
+          "roughness": 1,
+          "metalness": 0,
+          "emissive": 0,
+          "envMapIntensity": 1,
+          "refractionRatio": 0.98,
+          "side": 2,
+          "opacity": 0.2,
+          "transparent": true,
+          "depthFunc": 3,
+          "depthTest": true,
+          "depthWrite": true,
+          "colorWrite": true,
+          "stencilWrite": false,
+          "stencilWriteMask": 255,
+          "stencilFunc": 519,
+          "stencilRef": 0,
+          "stencilFuncMask": 255,
+          "stencilFail": 7680,
+          "stencilZFail": 7680,
+          "stencilZPass": 7680
+        }
+      ],
+      "object": {
+        "uuid": "3C0B7A4F-67E8-4E4F-B409-159A9307161F",
+        "type": "Mesh",
+        "layers": 1,
+        "matrix": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          2.220446049250313e-16,
+          -1,
+          0,
+          0,
+          1,
+          2.220446049250313e-16,
+          0,
+          -40,
+          0.1,
+          0,
+          1
+        ],
+        "geometry": "A82AF70E-2364-4C9B-A322-B4E7C80CA918",
+        "material": "EC0B6009-1CD0-4C1F-AA6D-62A3BD84CCE3"
+      }
+    }
   },
-  "sound": {},
+  "sound": {
+    "ctx": {},
+    "muted": true,
+    "masterGain": {},
+    "gameBgm": {},
+    "menuBgm": {},
+    "currentBgm": {},
+    "sfxHover": {},
+    "sfxClick": {}
+  },
   "gameMode": "survival",
   "sandboxBudget": 2000,
   "upkeepEnabled": true,
   "burstCount": 10,
   "gameStarted": true,
   "previousTimeScale": 1,
-  "gameStartTime": 12345.6,
-  "elapsedGameTime": 254.8,
-  "maliciousSpikeTimer": 29.8,
+  "gameStartTime": 271,
+  "elapsedGameTime": 135.0827000000004,
+  "maliciousSpikeTimer": 15.082700000000052,
   "maliciousSpikeActive": false,
   "normalTrafficDist": null,
-  "autoRepairEnabled": true,
   "intervention": {
-    "trafficShiftTimer": 14.2,
+    "trafficShiftTimer": 15.082700000000052,
     "trafficShiftActive": false,
     "currentShift": null,
     "originalTrafficDist": null,
-    "randomEventTimer": 8.9,
+    "randomEventTimer": 15.082700000000052,
     "activeEvent": null,
     "eventEndTime": 0,
-    "pausedEvent": null,
-    "remainingTime": 0,
-    "currentMilestoneIndex": 3,
-    "rpsMultiplier": 2.0,
+    "currentMilestoneIndex": 2,
+    "rpsMultiplier": 1.6,
     "recentEvents": [],
-    "warnings": []
+    "warnings": [
+      {
+        "message": "⚡ RPS SURGE! Traffic ×1.3",
+        "type": "danger",
+        "time": 1784299962714
+      },
+      {
+        "message": "⚡ RPS SURGE! Traffic ×1.6",
+        "type": "danger",
+        "time": 1784299962714
+      }
+    ],
+    "costMultiplier": 1,
+    "trafficBurstMultiplier": 1
   },
   "campaign": {
     "active": false,
@@ -59,74 +293,173 @@
     "outcome": null,
     "failureReason": null
   },
-  "hints": { "lastHintTime": 120.5, "dismissedHints": {}, "hintCooldown": 30 },
+  "autoRepairEnabled": true,
   "finances": {
     "income": {
-      "byType": { "STATIC": 31.5, "READ": 40.8, "WRITE": 26.4, "UPLOAD": 7.5, "SEARCH": 14.4 },
-      "countByType": { "STATIC": 63, "READ": 51, "WRITE": 22, "UPLOAD": 5, "SEARCH": 12, "blocked": 0 },
-      "requests": 120.6,
+      "byType": {
+        "STATIC": 22.10000000000001,
+        "READ": 17.28000000000001,
+        "WRITE": 13.199999999999998,
+        "UPLOAD": 3,
+        "SEARCH": 8.64
+      },
+      "countByType": {
+        "STATIC": 37,
+        "READ": 21,
+        "WRITE": 11,
+        "UPLOAD": 2,
+        "SEARCH": 7,
+        "blocked": 0
+      },
+      "requests": 64.22000000000003,
       "blocked": 0,
-      "total": 120.6
+      "total": 64.22000000000003
     },
     "expenses": {
-      "services": 355,
-      "upkeep": 61.2345,
-      "repairs": 18,
-      "autoRepair": 4.5678,
-      "mitigation": 98,
-      "breach": 100,
+      "services": 0,
+      "upkeep": 20.77837865695169,
+      "repairs": 0,
+      "autoRepair": 12.317538333333344,
+      "mitigation": 24,
+      "breach": 0,
       "byService": {
-        "waf": 12.5, "alb": 9.25, "compute": 27.75, "db": 41.5, "s3": 3.1,
-        "cache": 0, "sqs": 0, "search": 0, "replica": 0, "apigw": 0,
-        "nosql": 0, "cdn": 0, "serverless": 0
+        "waf": 1.2192956761788865,
+        "alb": 1.8289435142683332,
+        "compute": 3.6578870285366665,
+        "db": 7.315774057073333,
+        "s3": 1.5241195952236106,
+        "cache": 2.438591352357773,
+        "sqs": 0,
+        "search": 0,
+        "replica": 0,
+        "apigw": 0,
+        "nosql": 0,
+        "cdn": 1.5241195952236106,
+        "serverless": 1.2696478380894456
       },
       "countByService": {
-        "waf": 1, "alb": 1, "compute": 1, "db": 1, "s3": 1,
-        "cache": 0, "sqs": 0, "search": 0, "apigw": 0,
-        "nosql": 0, "cdn": 0, "replica": 0, "serverless": 0
+        "waf": 0,
+        "alb": 0,
+        "compute": 0,
+        "db": 0,
+        "s3": 0,
+        "cache": 0,
+        "sqs": 0,
+        "search": 0,
+        "replica": 0,
+        "apigw": 0,
+        "nosql": 0,
+        "cdn": 0,
+        "serverless": 0
       }
     }
   },
   "trafficDistribution": {
-    "STATIC": 0.3, "READ": 0.2, "WRITE": 0.15, "UPLOAD": 0.05, "SEARCH": 0.1, "MALICIOUS": 0.2
+    "STATIC": 0.3,
+    "READ": 0.2,
+    "WRITE": 0.15,
+    "UPLOAD": 0.05,
+    "SEARCH": 0.1,
+    "MALICIOUS": 0.2
   },
   "services": [
     {
       "id": "svc_a8k2j9x4q",
       "type": "waf",
-      "position": [-24, 0, 0],
-      "connections": ["svc_f6t2h8b3m"],
+      "position": [
+        -24,
+        0,
+        0
+      ],
+      "connections": [
+        "svc_f6t2h8b3m"
+      ],
       "tier": 1,
       "cacheHitRate": null
     },
     {
       "id": "svc_p3m7n1c5d",
       "type": "cdn",
-      "position": [-24, 0, 12],
-      "connections": ["svc_z1q9w4e7r"],
+      "position": [
+        -24,
+        0,
+        12
+      ],
+      "connections": [
+        "svc_z1q9w4e7r"
+      ],
       "tier": 1,
       "cacheHitRate": 0.95
     },
     {
       "id": "svc_f6t2h8b3m",
       "type": "alb",
-      "position": [-12, 0, 0],
-      "connections": ["svc_k5j3l7d9s"],
+      "position": [
+        -12,
+        0,
+        0
+      ],
+      "connections": [
+        "svc_k5j3l7d9s",
+        "svc_w9r4y6u1e"
+      ],
       "tier": 1,
       "cacheHitRate": null
     },
     {
       "id": "svc_k5j3l7d9s",
       "type": "compute",
-      "position": [0, 0, 0],
-      "connections": ["svc_v2b8n4m6x", "svc_z1q9w4e7r"],
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "connections": [
+        "svc_c7v3b5n8m",
+        "svc_v2b8n4m6x",
+        "svc_z1q9w4e7r"
+      ],
       "tier": 2,
       "cacheHitRate": null
     },
     {
+      "id": "svc_w9r4y6u1e",
+      "type": "serverless",
+      "position": [
+        0,
+        0,
+        -12
+      ],
+      "connections": [
+        "svc_v2b8n4m6x",
+        "svc_z1q9w4e7r"
+      ],
+      "tier": 1,
+      "cacheHitRate": null
+    },
+    {
+      "id": "svc_c7v3b5n8m",
+      "type": "cache",
+      "position": [
+        8,
+        0,
+        8
+      ],
+      "connections": [
+        "svc_v2b8n4m6x",
+        "svc_z1q9w4e7r"
+      ],
+      "tier": 1,
+      "cacheHitRate": 0.35
+    },
+    {
       "id": "svc_v2b8n4m6x",
       "type": "db",
-      "position": [12, 0, 0],
+      "position": [
+        12,
+        0,
+        0
+      ],
       "connections": [],
       "tier": 3,
       "cacheHitRate": null
@@ -134,21 +467,19 @@
     {
       "id": "svc_z1q9w4e7r",
       "type": "s3",
-      "position": [12, 0, 12],
+      "position": [
+        12,
+        0,
+        12
+      ],
       "connections": [],
       "tier": 1,
       "cacheHitRate": null
     }
   ],
-  "connections": [
-    { "from": "internet", "to": "svc_a8k2j9x4q" },
-    { "from": "svc_a8k2j9x4q", "to": "svc_f6t2h8b3m" },
-    { "from": "svc_f6t2h8b3m", "to": "svc_k5j3l7d9s" },
-    { "from": "svc_k5j3l7d9s", "to": "svc_v2b8n4m6x" },
-    { "from": "internet", "to": "svc_p3m7n1c5d" },
-    { "from": "svc_p3m7n1c5d", "to": "svc_z1q9w4e7r" },
-    { "from": "svc_k5j3l7d9s", "to": "svc_z1q9w4e7r" }
-  ],
   "requests": [],
-  "internetConnections": ["svc_a8k2j9x4q", "svc_p3m7n1c5d"]
+  "internetConnections": [
+    "svc_a8k2j9x4q",
+    "svc_p3m7n1c5d"
+  ]
 }
