@@ -125,8 +125,9 @@ describe("layering contract (ADR-0002)", () => {
         const violations = [];
         for (const file of SIM_SOURCES) {
             const source = stripComments(readFileSync(path.join(ROOT, file), "utf8"));
+            // Both forms: `import x from "…"` and side-effect `import "…"`.
             for (const match of source.matchAll(
-                /^\s*import\b[^;]*?from\s*["']([^"']+)["']/gm
+                /^\s*import\b(?:[^;]*?from\s*)?["']([^"']+)["']/gm
             )) {
                 const spec = match[1];
                 if (!spec.startsWith("./") && spec !== "../config.js") {
@@ -160,13 +161,18 @@ describe("layering contract (ADR-0002)", () => {
     it("E. raw input event sources are subscribed only in the platform layer", () => {
         const rawChannels =
             "(?:mouse|touch|pointer|key|wheel|contextmenu|blur|resize)";
-        // \s* spans newlines: catches the channel name on its own line too.
+        // Receivers: the page globals, the canvas container — or any call
+        // expression (`…)`), which catches the chained form
+        // document.getElementById("x").addEventListener("mousemove", …).
+        // Listeners on named UI elements (buttons, indicators) are UI-layer
+        // territory and stay allowed. \s* spans newlines: catches the
+        // channel name on its own line too.
         expect(
             findViolations(
                 ALL_SOURCES.filter((f) => !f.startsWith("src/platform/")),
                 [
                     new RegExp(
-                        `\\b(?:window|document|container|canvas)\\s*\\.\\s*addEventListener\\s*\\(\\s*["'\`]${rawChannels}`
+                        `(?:\\b(?:window|document|container|canvas)|\\))\\s*\\.\\s*addEventListener\\s*\\(\\s*["'\`]${rawChannels}`
                     ),
                 ]
             )

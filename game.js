@@ -2675,14 +2675,63 @@ function animate(time) {
     // its hooks drive the warnings/indicators drawn by this layer.
     STATE.world.events.update(dt);
 
-    // Reputation gains cap at 100 — clamp with the rest of the per-frame
-    // game logic, so the HUD-painting code below stays a pure reader of
-    // sim state (issue #7 渲染层单向消费).
+    // Auto-repair: pick repair targets, then settle the overhead in the
+    // sim economy.
+    processAutoRepair(dt);
+    STATE.world.economy.chargeAutoRepair(dt);
+
+    // Reputation gains cap at 100.
     STATE.reputation = Math.min(100, STATE.reputation);
+
+    // Game over only in survival mode. Last game-logic block of the frame:
+    // everything after it only reads state and paints (issue #7 渲染层单向
+    // 消费).
+    if (
+        STATE.gameMode === "survival" &&
+        (STATE.reputation <= 0 || STATE.money <= -1000)
+    ) {
+        STATE.isRunning = false;
+
+        // Determine failure reason and generate tips
+        const failureAnalysis = analyzeFailure();
+
+        document.getElementById("modal-title").innerText = i18n.t('system_failure');
+        document.getElementById("modal-title").classList.add("text-red-500");
+        document.getElementById("modal-desc").innerHTML = `
+            <div class="text-left space-y-3">
+                <div class="text-center text-2xl font-bold text-yellow-400 mb-2">${i18n.t('final_score', { score: STATE.score.total })}</div>
+                <div class="text-center text-sm text-gray-400 mb-4">${i18n.t('survived_time', { time: formatTime(STATE.elapsedGameTime || 0) })}</div>
+
+                <div class="bg-red-900/30 border border-red-500/50 rounded-lg p-3">
+                    <div class="text-red-400 font-bold text-sm uppercase mb-1">${i18n.t('failure_reason')}</div>
+                    <div class="text-white">${failureAnalysis.reason}</div>
+                </div>
+
+                <div class="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
+                    <div class="text-blue-400 font-bold text-sm uppercase mb-1">${i18n.t('analysis')}</div>
+                    <div class="text-gray-300 text-sm">${failureAnalysis.description}</div>
+                </div>
+
+                <div class="bg-green-900/30 border border-green-500/50 rounded-lg p-3">
+                    <div class="text-green-400 font-bold text-sm uppercase mb-1">${i18n.t('tips_title')}</div>
+                    <ul class="text-gray-300 text-sm list-disc list-inside space-y-1">
+                        ${failureAnalysis.tips
+                .map((tip) => `<li>${tip}</li>`)
+                .join("")}
+                    </ul>
+                </div>
+            </div>
+        `;
+        document.getElementById("modal").classList.remove("hidden");
+        // show the results card , now has an id
+        document.getElementById("modal-card").classList.remove("hidden");
+        // hide the "show results" floating button , new element
+        document.getElementById("modal-restore").classList.add("hidden");
+        STATE.sound.playGameOver();
+    }
 
     updateServiceHealthIndicators();
     updateActiveEventTimer();
-    processAutoRepair(dt);
     updateFinancesDisplay();
     checkSmartHints();
 
@@ -2713,9 +2762,6 @@ function animate(time) {
     const autoRepairCost =
         typeof getAutoRepairUpkeep === "function" ? getAutoRepairUpkeep() : 0;
     const totalUpkeep = baseUpkeep * multiplier + autoRepairCost;
-
-    // Auto-repair overhead settles in the sim economy.
-    STATE.world.economy.chargeAutoRepair(dt);
 
     const upkeepDisplay = document.getElementById("upkeep-display");
     if (upkeepDisplay) {
@@ -2872,51 +2918,6 @@ function animate(time) {
         } else {
             STATE.internetNode.ring.material.opacity = 0.2;
         }
-    }
-
-    // Game over only in survival mode
-    if (
-        STATE.gameMode === "survival" &&
-        (STATE.reputation <= 0 || STATE.money <= -1000)
-    ) {
-        STATE.isRunning = false;
-
-        // Determine failure reason and generate tips
-        const failureAnalysis = analyzeFailure();
-
-        document.getElementById("modal-title").innerText = i18n.t('system_failure');
-        document.getElementById("modal-title").classList.add("text-red-500");
-        document.getElementById("modal-desc").innerHTML = `
-            <div class="text-left space-y-3">
-                <div class="text-center text-2xl font-bold text-yellow-400 mb-2">${i18n.t('final_score', { score: STATE.score.total })}</div>
-                <div class="text-center text-sm text-gray-400 mb-4">${i18n.t('survived_time', { time: formatTime(STATE.elapsedGameTime || 0) })}</div>
-                
-                <div class="bg-red-900/30 border border-red-500/50 rounded-lg p-3">
-                    <div class="text-red-400 font-bold text-sm uppercase mb-1">${i18n.t('failure_reason')}</div>
-                    <div class="text-white">${failureAnalysis.reason}</div>
-                </div>
-                
-                <div class="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
-                    <div class="text-blue-400 font-bold text-sm uppercase mb-1">${i18n.t('analysis')}</div>
-                    <div class="text-gray-300 text-sm">${failureAnalysis.description}</div>
-                </div>
-                
-                <div class="bg-green-900/30 border border-green-500/50 rounded-lg p-3">
-                    <div class="text-green-400 font-bold text-sm uppercase mb-1">${i18n.t('tips_title')}</div>
-                    <ul class="text-gray-300 text-sm list-disc list-inside space-y-1">
-                        ${failureAnalysis.tips
-                .map((tip) => `<li>${tip}</li>`)
-                .join("")}
-                    </ul>
-                </div>
-            </div>
-        `;
-        document.getElementById("modal").classList.remove("hidden");
-        // show the results card , now has an id
-        document.getElementById("modal-card").classList.remove("hidden");
-        // hide the "show results" floating button , new element
-        document.getElementById("modal-restore").classList.add("hidden");
-        STATE.sound.playGameOver();
     }
 
     renderer.render(scene, camera);
