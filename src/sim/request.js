@@ -9,6 +9,15 @@
 // which is behavior, not cosmetics: in-flight requests hold an
 // incomingCount slot on their target, and that drives SQS backpressure and
 // the compute pull pipeline.
+// Release the in-flight slot a request holds on its target. Shared by hop
+// arrival (below) and SimWorld._removeFromSim, so incomingCount-based
+// backpressure can't leak when a request lands or dies mid-hop.
+export function releaseInFlightSlot(req) {
+    if (req.target && typeof req.target.incomingCount === "number") {
+        req.target.incomingCount = Math.max(0, req.target.incomingCount - 1);
+    }
+}
+
 export class SimRequest {
     constructor(world, type) {
         this.world = world;
@@ -56,9 +65,7 @@ export class SimRequest {
                 this.progress = 1;
                 this.isMoving = false;
 
-                if (this.target && typeof this.target.incomingCount === "number") {
-                    this.target.incomingCount = Math.max(0, this.target.incomingCount - 1);
-                }
+                releaseInFlightSlot(this);
 
                 // Use service-specific max queue size
                 const maxQueue = this.target.config.maxQueueSize || 20;

@@ -468,6 +468,7 @@ class Service extends SimService {
     const service = new Service(serviceData.type, pos);
     service.id = serviceData.id;
     service.mesh.userData.id = serviceData.id;
+    STATE.world.claimServiceId(serviceData.id);
 
     if (serviceData.tier && serviceData.tier > 1) {
       const tiers = CONFIG.services[serviceData.type]?.tiers;

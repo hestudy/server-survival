@@ -44,6 +44,7 @@ export function wire(world, from, to) {
 }
 
 export function stepFor(world, seconds, dt = STEP) {
+    // Half-step epsilon so float accumulation can't run one step long.
     for (let t = 0; t < seconds - dt / 2; t += dt) world.step(dt);
 }
 

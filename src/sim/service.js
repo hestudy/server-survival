@@ -103,16 +103,6 @@ export class SimService {
         );
     }
 
-    forwardToDestination(req) {
-        const destType = req.destination;
-        const target = this.findConnectedService(destType);
-        if (target) {
-            req.flyTo(target);
-            return true;
-        }
-        return false;
-    }
-
     popRequest() {
         // Try to take from processing list first (these are "ready" or "in-flight" but held back)
         if (this.processing.length > 0) {

@@ -10,18 +10,24 @@
 // and applies money/reputation/score changes there until they migrate in
 // M1-c/M1-d.
 import { CONFIG, TRAFFIC_TYPES } from "../config.js";
-import { SimRequest } from "./request.js";
+import { SimRequest, releaseInFlightSlot } from "./request.js";
 import { SimService } from "./service.js";
 
 export class SimWorld {
     constructor({
         config = CONFIG,
         trafficTypes = TRAFFIC_TYPES,
-        rng = Math.random,
+        rng,
         hooks = {},
         trafficDistribution = null,
         requestFactory = null,
     } = {}) {
+        // No default on purpose: the sim core must never name a platform
+        // RNG itself (CONTEXT.md 仿真核心). The web layer injects
+        // Math.random; tests inject seeded/scripted rngs.
+        if (typeof rng !== "function") {
+            throw new TypeError("SimWorld requires an injected rng () => [0,1)");
+        }
         this.config = config;
         this.trafficTypes = trafficTypes;
         this.rng = rng;
@@ -66,6 +72,16 @@ export class SimWorld {
 
     nextServiceId() {
         return "svc_" + ++this._serviceSeq;
+    }
+
+    // Restoring a save overwrites generated ids with the saved ones. Any
+    // sequential-format id ("svc_<n>") must advance the sequence past n, or
+    // the next placed service could mint a duplicate id — duplicate ids
+    // corrupt connection lookups and deletion. Pre-refactor random ids
+    // don't match the pattern and can't collide with the counter format.
+    claimServiceId(id) {
+        const m = /^svc_(\d+)$/.exec(id);
+        if (m) this._serviceSeq = Math.max(this._serviceSeq, Number(m[1]));
     }
 
     getService(id) {
@@ -227,11 +243,7 @@ export class SimWorld {
     }
 
     _removeFromSim(req) {
-        // Release the in-flight slot on the target so incomingCount-based
-        // backpressure doesn't leak when a request dies mid-hop.
-        if (req.isMoving && req.target && typeof req.target.incomingCount === "number") {
-            req.target.incomingCount = Math.max(0, req.target.incomingCount - 1);
-        }
+        if (req.isMoving) releaseInFlightSlot(req);
         req.isMoving = false;
         this.requests = this.requests.filter((r) => r !== req);
     }
