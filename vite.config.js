@@ -17,4 +17,10 @@ export default defineConfig({
   // (https://<user>.github.io/server-survival/) without hardcoding the repo name.
   base: "./",
   plugins: [copyRuntimeAssets()],
+  // Vitest picks this file up too. The simulation core must run headless
+  // (no DOM, no Three.js), so tests use the plain node environment.
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.js"],
+  },
 });

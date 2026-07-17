@@ -1,0 +1,73 @@
+// Shared helpers for simulation-core tests (seam 1): build a headless
+// world, wire a topology, inject traffic, step, and record every lifecycle
+// hook the world emits.
+import { SimWorld } from "./world.js";
+
+// 50ms steps ≈ a 20fps frame — coarse enough to be fast, fine enough that
+// every processing time in CONFIG (≥20ms) behaves like in the real loop.
+export const STEP = 0.05;
+
+export function recordingHooks() {
+    const events = [];
+    return {
+        events,
+        of(kind) {
+            return events.filter((ev) => ev.e === kind);
+        },
+        onFinished: (req, via) =>
+            events.push({ e: "finished", id: req.id, type: req.type, via, cached: req.cached }),
+        onFailed: (req, reason) =>
+            events.push({ e: "failed", id: req.id, type: req.type, reason }),
+        onThrottled: (req) =>
+            events.push({ e: "throttled", id: req.id, type: req.type }),
+        onBlocked: (req) =>
+            events.push({ e: "blocked", id: req.id, type: req.type }),
+        onDiscarded: (req) =>
+            events.push({ e: "discarded", id: req.id, type: req.type }),
+    };
+}
+
+// Default rng draws 0.999999: never a cache hit, never a load-failure roll
+// (unless the fail chance saturates at 1) — the "nothing random happens"
+// baseline. Pass createRngStub/createSeededRng to force specific branches.
+export function makeWorld(opts = {}) {
+    const hooks = recordingHooks();
+    const world = new SimWorld({ rng: () => 0.999999, hooks, ...opts });
+    return { world, hooks };
+}
+
+export function wire(world, from, to) {
+    return world.connect(
+        from === "internet" ? "internet" : from.id,
+        to === "internet" ? "internet" : to.id
+    );
+}
+
+export function stepFor(world, seconds, dt = STEP) {
+    // Half-step epsilon so float accumulation can't run one step long.
+    for (let t = 0; t < seconds - dt / 2; t += dt) world.step(dt);
+}
+
+// Step until every request has reached a terminal state. Returns the
+// simulated seconds it took; hitting maxSeconds with live requests left
+// means something is stuck (see the dead-loop regression test).
+export function runUntilDrained(world, { maxSeconds = 60, dt = STEP } = {}) {
+    let t = 0;
+    while (world.requests.length > 0 && t < maxSeconds) {
+        world.step(dt);
+        t += dt;
+    }
+    return t;
+}
+
+export function terminalTotal(world) {
+    const s = world.stats;
+    return (
+        s.completed +
+        s.failed +
+        s.throttled +
+        s.maliciousBlocked +
+        s.maliciousPassed +
+        s.discarded
+    );
+}
