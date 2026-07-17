@@ -215,12 +215,11 @@ export class SimEvents {
         }
     }
 
-    // durationSeconds defaults to the historical 30s. An explicit eventType
-    // (and, for outages, outageServiceId) re-applies a known event — the
-    // seam the web layer's pause/resume path historically needed; with
-    // sim-clock timing a pause simply stops calling update, so the running
-    // event keeps its target and remaining time by construction.
-    triggerRandomEvent(eventType = null, durationSeconds = null, outageServiceId = null) {
+    // Every event runs the historical 30 sim-seconds. eventType is drawn
+    // from the rng when not forced by the caller. No resume seam needed:
+    // with sim-clock timing a pause simply stops calling update, so a
+    // running event keeps its target and remaining time by construction.
+    triggerRandomEvent(eventType = null) {
         if (this.activeEvent) return;
 
         const world = this.world;
@@ -229,7 +228,7 @@ export class SimEvents {
             eventType =
                 config.types[Math.floor(world.rng() * config.types.length)];
         }
-        if (!durationSeconds) durationSeconds = 30;
+        const durationSeconds = 30;
 
         this.activeEvent = eventType;
         this.eventEndTime = world.time + durationSeconds;
@@ -253,22 +252,16 @@ export class SimEvents {
                 break;
 
             case "SERVICE_OUTAGE": {
-                // Reuse a previously-chosen service when re-applying a known
-                // outage, otherwise pick a fresh random non-WAF target
-                // (「outage 传送」 regression: the target must never re-roll
-                // for the same outage).
-                let target = outageServiceId
-                    ? world.services.find((s) => s.id === outageServiceId)
-                    : null;
-                if (!target) {
-                    const candidates = world.services.filter(
-                        (s) => s.type !== "waf"
-                    );
-                    target =
-                        candidates.length > 0
-                            ? candidates[Math.floor(world.rng() * candidates.length)]
-                            : null;
-                }
+                // Pick a random non-WAF target. The choice is made exactly
+                // once per outage (「outage 传送」 regression: the target
+                // must never re-roll while the event runs).
+                const candidates = world.services.filter(
+                    (s) => s.type !== "waf"
+                );
+                const target =
+                    candidates.length > 0
+                        ? candidates[Math.floor(world.rng() * candidates.length)]
+                        : null;
                 if (target) {
                     this.outageServiceId = target.id;
                     target.isDisabled = true;
