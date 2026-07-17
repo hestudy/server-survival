@@ -16,25 +16,10 @@ const world = new SimWorld({
 });
 
 const STATE = {
-    money: 0,
-    reputation: 0,
+    // money / reputation / score / failures / finances / upkeepEnabled /
+    // autoRepairEnabled live in the sim economy, elapsedGameTime in the sim
+    // clock — all aliased onto STATE below.
     requestsProcessed: 0,
-
-    score: {
-        total: 0,
-        storage: 0,
-        database: 0,
-        maliciousBlocked: 0
-    },
-
-    failures: {
-        STATIC: 0,
-        READ: 0,
-        WRITE: 0,
-        UPLOAD: 0,
-        SEARCH: 0,
-        MALICIOUS: 0
-    },
 
     activeTool: 'select',
     selectedNodeId: null,
@@ -65,7 +50,6 @@ const STATE = {
     // Sandbox mode state
     gameMode: 'survival',
     sandboxBudget: 2000,
-    upkeepEnabled: true,
     burstCount: 10,
 
     // Menu state
@@ -74,7 +58,6 @@ const STATE = {
 
     // Balance overhaul state
     gameStartTime: 0,
-    elapsedGameTime: 0,
     maliciousSpikeTimer: 0,
     maliciousSpikeActive: false,
     normalTrafficDist: null,
@@ -140,6 +123,30 @@ Object.defineProperties(STATE, {
     trafficDistribution: {
         get() { return world.trafficDistribution; },
         set(v) { world.trafficDistribution = v; },
+    },
+});
+
+// Economy and clock aliases (M1-c): settlement state lives in the sim
+// economy, the game clock in the sim world. Enumerable on purpose — unlike
+// the world aliases above, these are plain JSON-safe values that must keep
+// appearing in the save payload when saveGameState spreads STATE.
+const economyAlias = (name) => ({
+    enumerable: true,
+    get() { return world.economy[name]; },
+    set(v) { world.economy[name] = v; },
+});
+Object.defineProperties(STATE, {
+    money: economyAlias("money"),
+    reputation: economyAlias("reputation"),
+    score: economyAlias("score"),
+    failures: economyAlias("failures"),
+    finances: economyAlias("finances"),
+    upkeepEnabled: economyAlias("upkeepEnabled"),
+    autoRepairEnabled: economyAlias("autoRepairEnabled"),
+    elapsedGameTime: {
+        enumerable: true,
+        get() { return world.time; },
+        set(v) { world.time = v; },
     },
 });
 

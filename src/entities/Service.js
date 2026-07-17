@@ -1,9 +1,9 @@
 import { SimService } from "../sim/service.js";
 
-// Web-layer service: the simulation core (SimService) owns queueing and
-// per-hop routing; this subclass adds the Three.js meshes plus the parts
-// that have not migrated into the sim yet — health degradation (M1-d),
-// upkeep/upgrade/repair economy (M1-c) — and the visual load/health
+// Web-layer service: the simulation core (SimService) owns queueing,
+// per-hop routing, maintenance fees and repair settlement; this subclass
+// adds the Three.js meshes plus the parts that have not migrated into the
+// sim yet — health degradation (M1-d) — and the visual load/health
 // indicators.
 class Service extends SimService {
   constructor(type, pos) {
@@ -198,38 +198,33 @@ class Service extends SimService {
     STATE.sound.playPlace();
 
     // Visuals
-    let ringSize, ringColor;
-    if (this.type === "db") {
-      ringSize = 2.2;
-      ringColor = 0xff0000;
-    } else if (this.type === "cache") {
-      ringSize = 1.5;
-      ringColor = 0xdc382d; // Redis red
-    } else if (this.type === "apigw") {
-      ringSize = 1.5;
-      ringColor = 0xe879f9;
-    } else if (this.type === "nosql") {
-      ringSize = 2.0;
-      ringColor = 0x7c3aed;
-    } else if (this.type === "search") {
-      ringSize = 1.5;
-      ringColor = 0x06b6d4;
-    } else if (this.type === "replica") {
-      ringSize = 1.8;
-      ringColor = 0xf472b6;
-    } else {
-      ringSize = 1.3;
-      ringColor = 0xffff00;
-    }
+    this.addTierRing(this.tier);
+  }
 
-    const ringGeo = new THREE.TorusGeometry(ringSize, 0.1, 8, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: ringColor });
+  tierRingStyle() {
+    if (this.type === "db") return { size: 2.2, color: 0xff0000 };
+    if (this.type === "cache") return { size: 1.5, color: 0xdc382d }; // Redis red
+    if (this.type === "apigw") return { size: 1.5, color: 0xe879f9 };
+    if (this.type === "nosql") return { size: 2.0, color: 0x7c3aed };
+    if (this.type === "search") return { size: 1.5, color: 0x06b6d4 };
+    if (this.type === "replica") return { size: 1.8, color: 0xf472b6 };
+    return { size: 1.3, color: 0xffff00 };
+  }
+
+  addTierRing(tierLevel) {
+    const { size, color } = this.tierRingStyle();
+    const ringGeo = new THREE.TorusGeometry(size, 0.1, 8, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = Math.PI / 2;
-    // Tier rings
-    ring.position.y = -this.mesh.position.y + (this.tier === 2 ? 0.5 : 1.0);
+    ring.position.y = -this.mesh.position.y + (tierLevel === 2 ? 0.5 : 1.0);
     this.mesh.add(ring);
     this.tierRings.push(ring);
+  }
+
+  // One ring per tier above 1 — used when rebuilding a saved service.
+  drawTierRings() {
+    for (let t = 2; t <= this.tier; t++) this.addTierRing(t);
   }
 
   update(dt) {
@@ -258,19 +253,8 @@ class Service extends SimService {
       this.updateHealthVisual();
     }
 
-    if (STATE.upkeepEnabled) {
-      const multiplier =
-        typeof getUpkeepMultiplier === "function" ? getUpkeepMultiplier() : 1.0;
-      const upkeepCost = (this.config.upkeep / 60) * dt * multiplier;
-      STATE.money -= upkeepCost;
-      if (STATE.finances) {
-        STATE.finances.expenses.upkeep += upkeepCost;
-        STATE.finances.expenses.byService[this.type] =
-          (STATE.finances.expenses.byService[this.type] || 0) + upkeepCost;
-      }
-    }
-
-    // Simulation core: rate window, compute pull, queue admission, routing.
+    // Simulation core: maintenance fee, rate window, compute pull, queue
+    // admission, routing.
     super.update(dt);
 
     if (this.totalLoad > 0.8) {
@@ -437,97 +421,22 @@ class Service extends SimService {
   repair() {
     if (this.health >= 100) return false;
 
-    const repairConfig = CONFIG.survival.degradation;
-    const repairCost = Math.ceil(
-      this.config.cost * (repairConfig?.repairCostPercent || 0.15)
-    );
-
-    if (STATE.money < repairCost) {
+    // Cost math and the money check settle in the sim economy.
+    if (!STATE.world.economy.repairService(this)) {
       flashMoney();
       addInterventionWarning(
-        i18n.t('repair_need_money', { cost: repairCost }),
+        i18n.t('repair_need_money', { cost: STATE.world.economy.repairCost(this) }),
         "danger",
         2000
       );
       return false;
     }
 
-    STATE.money -= repairCost;
-    if (STATE.finances) {
-      STATE.finances.expenses.repairs += repairCost;
-      STATE.finances.expenses.byService[this.type] =
-        (STATE.finances.expenses.byService[this.type] || 0) + repairCost;
-    }
-    this.health = 100;
     this.updateHealthVisual();
     STATE.sound?.playPlace();
     return true;
   }
 
-  static restore(serviceData, pos) {
-    const service = new Service(serviceData.type, pos);
-    service.id = serviceData.id;
-    service.mesh.userData.id = serviceData.id;
-    STATE.world.claimServiceId(serviceData.id);
-
-    if (serviceData.tier && serviceData.tier > 1) {
-      const tiers = CONFIG.services[serviceData.type]?.tiers;
-      if (tiers) {
-        service.tier = serviceData.tier;
-        const tierData = tiers[service.tier - 1];
-        if (tierData) {
-          service.config = { ...service.config, capacity: tierData.capacity };
-          if (tierData.cacheHitRate) {
-            service.config = {
-              ...service.config,
-              cacheHitRate: tierData.cacheHitRate,
-            };
-          }
-          if (tierData.rateLimit) {
-            service.config = {
-              ...service.config,
-              rateLimit: tierData.rateLimit,
-            };
-          }
-        }
-
-        for (let t = 2; t <= service.tier; t++) {
-          let ringSize, ringColor;
-          if (service.type === "db") {
-            ringSize = 2.2;
-            ringColor = 0xff0000;
-          } else if (service.type === "cache") {
-            ringSize = 1.5;
-            ringColor = 0xdc382d;
-          } else if (service.type === "apigw") {
-            ringSize = 1.5;
-            ringColor = 0xe879f9;
-          } else if (service.type === "nosql") {
-            ringSize = 2.0;
-            ringColor = 0x7c3aed;
-          } else if (service.type === "search") {
-            ringSize = 1.5;
-            ringColor = 0x06b6d4;
-          } else if (service.type === "replica") {
-            ringSize = 1.8;
-            ringColor = 0xf472b6;
-          } else {
-            ringSize = 1.3;
-            ringColor = 0xffff00;
-          }
-          const ringGeo = new THREE.TorusGeometry(ringSize, 0.1, 8, 32);
-          const ringMat = new THREE.MeshBasicMaterial({ color: ringColor });
-          const ring = new THREE.Mesh(ringGeo, ringMat);
-          ring.rotation.x = Math.PI / 2;
-          ring.position.y = -service.mesh.position.y + (t === 2 ? 0.5 : 1.0);
-          service.mesh.add(ring);
-          service.tierRings.push(ring);
-        }
-      }
-    }
-
-    return service;
-  }
 }
 
 // Transitional global bridge (ADR-0002 expand step): instantiated by game.js.

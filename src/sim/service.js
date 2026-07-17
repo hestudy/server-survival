@@ -6,9 +6,10 @@
 // update(dt) owns the per-hop routing pipeline: API-gateway rate window,
 // compute/serverless pull from upstream SQS, queue admission (WAF blocks
 // malicious traffic here), and the processing loop that decides each
-// finished job's next hop or terminal state. Health degradation, upkeep
-// and per-request billing stay in outer layers — the sim only reads
-// `health` and emits hooks at the billing points.
+// finished job's next hop or terminal state. Maintenance fees and
+// serverless per-request billing settle through world.economy (M1-c);
+// health degradation stays in the web layer until the event system
+// migrates (M1-d) — the sim only reads `health`.
 
 /**
  * Calculates the percentage if failure based on the load of the node.
@@ -122,6 +123,9 @@ export class SimService {
     }
 
     update(dt) {
+        // Maintenance fee (with its time escalation) settles in the economy.
+        this.world.economy.chargeUpkeep(this, dt);
+
         // API Gateway rate counter reset
         if (this.type === "apigw") {
             this.rateTimer = (this.rateTimer || 0) + dt;
@@ -208,7 +212,7 @@ export class SimService {
                 if (this.world.rng() < totalFailChance) {
                     // Serverless pays per invocation even when the function errors out
                     if (this.type === "serverless") {
-                        this.world.hooks.onServerlessCharge?.(this);
+                        this.world.chargeServerless(this);
                     }
                     this.world.failRequest(job.req, "processing-failure");
                     continue;
@@ -421,10 +425,9 @@ export class SimService {
                 if (this.type === "compute" || this.type === "serverless") {
                     // Per-request cost for serverless (AWS Lambda style - charged per invocation,
                     // including failed ones since you still pay for execution time).
-                    // Billing itself lives in the web layer until economy migrates (M1-c).
                     const chargePerRequest = () => {
                         if (this.type !== "serverless") return;
-                        this.world.hooks.onServerlessCharge?.(this);
+                        this.world.chargeServerless(this);
                     };
 
                     const destType = job.req.destination;
