@@ -1,0 +1,154 @@
+{
+  "timestamp": 1752700000000,
+  "version": "2.0",
+  "money": 312.4567,
+  "reputation": 87.3,
+  "requestsProcessed": 142,
+  "score": { "total": 693, "storage": 210, "database": 385, "maliciousBlocked": 98 },
+  "failures": { "STATIC": 1, "READ": 2, "WRITE": 0, "UPLOAD": 0, "SEARCH": 1, "MALICIOUS": 2 },
+  "activeTool": "select",
+  "selectedNodeId": null,
+  "lastTime": 84123.5,
+  "spawnTimer": 0.31,
+  "currentRPS": 3.7,
+  "timeScale": 1,
+  "isRunning": true,
+  "animationId": 512,
+  "internetNode": {
+    "id": "internet",
+    "type": "internet",
+    "position": { "x": -40, "y": 0, "z": 0 },
+    "connections": ["svc_a8k2j9x4q", "svc_p3m7n1c5d"]
+  },
+  "sound": {},
+  "gameMode": "survival",
+  "sandboxBudget": 2000,
+  "upkeepEnabled": true,
+  "burstCount": 10,
+  "gameStarted": true,
+  "previousTimeScale": 1,
+  "gameStartTime": 12345.6,
+  "elapsedGameTime": 254.8,
+  "maliciousSpikeTimer": 29.8,
+  "maliciousSpikeActive": false,
+  "normalTrafficDist": null,
+  "autoRepairEnabled": true,
+  "intervention": {
+    "trafficShiftTimer": 14.2,
+    "trafficShiftActive": false,
+    "currentShift": null,
+    "originalTrafficDist": null,
+    "randomEventTimer": 8.9,
+    "activeEvent": null,
+    "eventEndTime": 0,
+    "pausedEvent": null,
+    "remainingTime": 0,
+    "currentMilestoneIndex": 3,
+    "rpsMultiplier": 2.0,
+    "recentEvents": [],
+    "warnings": []
+  },
+  "campaign": {
+    "active": false,
+    "currentLevelId": null,
+    "level": null,
+    "objectiveResults": {},
+    "bonusResults": {},
+    "startedAt": 0,
+    "ended": false,
+    "outcome": null,
+    "failureReason": null
+  },
+  "hints": { "lastHintTime": 120.5, "dismissedHints": {}, "hintCooldown": 30 },
+  "finances": {
+    "income": {
+      "byType": { "STATIC": 31.5, "READ": 40.8, "WRITE": 26.4, "UPLOAD": 7.5, "SEARCH": 14.4 },
+      "countByType": { "STATIC": 63, "READ": 51, "WRITE": 22, "UPLOAD": 5, "SEARCH": 12, "blocked": 0 },
+      "requests": 120.6,
+      "blocked": 0,
+      "total": 120.6
+    },
+    "expenses": {
+      "services": 355,
+      "upkeep": 61.2345,
+      "repairs": 18,
+      "autoRepair": 4.5678,
+      "mitigation": 98,
+      "breach": 100,
+      "byService": {
+        "waf": 12.5, "alb": 9.25, "compute": 27.75, "db": 41.5, "s3": 3.1,
+        "cache": 0, "sqs": 0, "search": 0, "replica": 0, "apigw": 0,
+        "nosql": 0, "cdn": 0, "serverless": 0
+      },
+      "countByService": {
+        "waf": 1, "alb": 1, "compute": 1, "db": 1, "s3": 1,
+        "cache": 0, "sqs": 0, "search": 0, "apigw": 0,
+        "nosql": 0, "cdn": 0, "replica": 0, "serverless": 0
+      }
+    }
+  },
+  "trafficDistribution": {
+    "STATIC": 0.3, "READ": 0.2, "WRITE": 0.15, "UPLOAD": 0.05, "SEARCH": 0.1, "MALICIOUS": 0.2
+  },
+  "services": [
+    {
+      "id": "svc_a8k2j9x4q",
+      "type": "waf",
+      "position": [-24, 0, 0],
+      "connections": ["svc_f6t2h8b3m"],
+      "tier": 1,
+      "cacheHitRate": null
+    },
+    {
+      "id": "svc_p3m7n1c5d",
+      "type": "cdn",
+      "position": [-24, 0, 12],
+      "connections": ["svc_z1q9w4e7r"],
+      "tier": 1,
+      "cacheHitRate": 0.95
+    },
+    {
+      "id": "svc_f6t2h8b3m",
+      "type": "alb",
+      "position": [-12, 0, 0],
+      "connections": ["svc_k5j3l7d9s"],
+      "tier": 1,
+      "cacheHitRate": null
+    },
+    {
+      "id": "svc_k5j3l7d9s",
+      "type": "compute",
+      "position": [0, 0, 0],
+      "connections": ["svc_v2b8n4m6x", "svc_z1q9w4e7r"],
+      "tier": 2,
+      "cacheHitRate": null
+    },
+    {
+      "id": "svc_v2b8n4m6x",
+      "type": "db",
+      "position": [12, 0, 0],
+      "connections": [],
+      "tier": 3,
+      "cacheHitRate": null
+    },
+    {
+      "id": "svc_z1q9w4e7r",
+      "type": "s3",
+      "position": [12, 0, 12],
+      "connections": [],
+      "tier": 1,
+      "cacheHitRate": null
+    }
+  ],
+  "connections": [
+    { "from": "internet", "to": "svc_a8k2j9x4q" },
+    { "from": "svc_a8k2j9x4q", "to": "svc_f6t2h8b3m" },
+    { "from": "svc_f6t2h8b3m", "to": "svc_k5j3l7d9s" },
+    { "from": "svc_k5j3l7d9s", "to": "svc_v2b8n4m6x" },
+    { "from": "internet", "to": "svc_p3m7n1c5d" },
+    { "from": "svc_p3m7n1c5d", "to": "svc_z1q9w4e7r" },
+    { "from": "svc_k5j3l7d9s", "to": "svc_z1q9w4e7r" }
+  ],
+  "requests": [],
+  "internetConnections": ["svc_a8k2j9x4q", "svc_p3m7n1c5d"]
+}

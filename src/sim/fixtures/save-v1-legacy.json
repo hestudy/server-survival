@@ -1,0 +1,61 @@
+{
+  "timestamp": 1735000000000,
+  "money": 220,
+  "reputation": 64,
+  "requestsProcessed": 58,
+  "score": { "total": 180, "web": 90, "api": 60, "fraudBlocked": 30 },
+  "activeTool": "select",
+  "selectedNodeId": null,
+  "spawnTimer": 0.1,
+  "currentRPS": 2.1,
+  "timeScale": 1,
+  "isRunning": true,
+  "gameMode": "survival",
+  "sandboxBudget": 2000,
+  "upkeepEnabled": true,
+  "fraudSpikeTimer": 12.5,
+  "fraudSpikeActive": false,
+  "trafficDistribution": { "WEB": 0.5, "API": 0.3, "FRAUD": 0.2 },
+  "services": [
+    {
+      "id": "svc_old1amq7z",
+      "type": "waf",
+      "position": [-24, 0, 0],
+      "connections": ["svc_old2bxk3p"],
+      "tier": 1,
+      "cacheHitRate": null
+    },
+    {
+      "id": "svc_old2bxk3p",
+      "type": "alb",
+      "position": [-12, 0, 0],
+      "connections": ["svc_old3cvj9t"],
+      "tier": 1,
+      "cacheHitRate": null
+    },
+    {
+      "id": "svc_old3cvj9t",
+      "type": "compute",
+      "position": [0, 0, 0],
+      "connections": ["svc_old4dnh5w"],
+      "tier": 1,
+      "cacheHitRate": null
+    },
+    {
+      "id": "svc_old4dnh5w",
+      "type": "db",
+      "position": [12, 0, 0],
+      "connections": [],
+      "tier": 1,
+      "cacheHitRate": null
+    }
+  ],
+  "connections": [
+    { "from": "internet", "to": "svc_old1amq7z" },
+    { "from": "svc_old1amq7z", "to": "svc_old2bxk3p" },
+    { "from": "svc_old2bxk3p", "to": "svc_old3cvj9t" },
+    { "from": "svc_old3cvj9t", "to": "svc_old4dnh5w" }
+  ],
+  "requests": [],
+  "internetConnections": ["svc_old1amq7z"]
+}

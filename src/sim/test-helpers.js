@@ -33,7 +33,7 @@ export function recordingHooks() {
 export function makeWorld(opts = {}) {
     const hooks = recordingHooks();
     const world = new SimWorld({ rng: () => 0.999999, hooks, ...opts });
-    return { world, hooks };
+    return { world, hooks, economy: world.economy };
 }
 
 export function wire(world, from, to) {

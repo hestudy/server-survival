@@ -3,13 +3,14 @@
 // randomness through the injected rng. Build a world, add services, connect
 // them, inject traffic, step(dt), then assert terminal states.
 //
-// What lives here (M1-b): traffic spawning, entry selection, per-hop
-// routing (in SimService), and the request lifecycle terminals
-// (finish / fail / throttle / block / remove). Economy, scoring, sounds and
-// visuals are the caller's business: the web layer subscribes via `hooks`
-// and applies money/reputation/score changes there until they migrate in
-// M1-c/M1-d.
+// What lives here (M1-b/M1-c): traffic spawning, entry selection, per-hop
+// routing (in SimService), the request lifecycle terminals (finish / fail /
+// throttle / block / remove), and — via `economy` — every settlement those
+// terminals trigger: income, scoring, reputation, maintenance fees, repair
+// and serverless billing. Sounds and visuals are the caller's business: the
+// web layer subscribes via `hooks` for presentation only.
 import { CONFIG, TRAFFIC_TYPES } from "../config.js";
+import { SimEconomy } from "./economy.js";
 import { SimRequest, releaseInFlightSlot } from "./request.js";
 import { SimService } from "./service.js";
 
@@ -40,6 +41,11 @@ export class SimWorld {
         this.services = [];
         this.requests = [];
         this.internet = { id: "internet", type: "internet", connections: [] };
+        // Simulated game time in seconds. step() advances it; the upkeep
+        // time escalation reads it. The web layer keeps it in sync with its
+        // own frame clock via the STATE.elapsedGameTime alias.
+        this.time = 0;
+        this.economy = new SimEconomy(this);
         this.trafficDistribution =
             trafficDistribution || { ...config.survival.trafficDistribution };
 
@@ -194,10 +200,19 @@ export class SimWorld {
     }
 
     // Advance the simulation. Mirrors the frame order of the web game loop:
-    // services route/process first, then in-flight requests move.
+    // the clock advances first, then services route/process, then in-flight
+    // requests move.
     step(dt) {
+        this.time += dt;
         this.services.forEach((s) => s.update(dt));
         this.requests.forEach((r) => r.update(dt));
+    }
+
+    // Serverless per-invocation billing point (called by SimService at every
+    // routing/terminal decision on a serverless node, including failures).
+    chargeServerless(service) {
+        this.economy.chargeServerless(service);
+        this.hooks.onServerlessCharge?.(service);
     }
 
     // ---- Request lifecycle terminals ----------------------------------
@@ -207,6 +222,7 @@ export class SimWorld {
 
     finishRequest(req, viaServiceType) {
         this.stats.completed++;
+        this.economy.settle("COMPLETED", req);
         this._removeFromSim(req);
         this.hooks.onFinished?.(req, viaServiceType);
     }
@@ -214,8 +230,10 @@ export class SimWorld {
     failRequest(req, reason = null) {
         if (req.type === this.trafficTypes.MALICIOUS) {
             this.stats.maliciousPassed++;
+            this.economy.settle("MALICIOUS_PASSED", req);
         } else {
             this.stats.failed++;
+            this.economy.settle("FAILED", req);
         }
         this._removeFromSim(req);
         this.hooks.onFailed?.(req, reason);
@@ -223,6 +241,7 @@ export class SimWorld {
 
     throttleRequest(req) {
         this.stats.throttled++;
+        this.economy.settle("THROTTLED", req);
         this._removeFromSim(req);
         this.hooks.onThrottled?.(req);
     }
@@ -230,6 +249,7 @@ export class SimWorld {
     // WAF interception of MALICIOUS traffic.
     blockRequest(req) {
         this.stats.maliciousBlocked++;
+        this.economy.settle("MALICIOUS_BLOCKED", req);
         this._removeFromSim(req);
         this.hooks.onBlocked?.(req);
     }

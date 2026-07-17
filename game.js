@@ -1,42 +1,54 @@
 import { calculateFailChanceBasedOnLoad } from "./src/sim/service.js";
+import {
+    SAVE_KEY,
+    buildSaveData,
+    normalizeSave,
+    restoreWorld,
+} from "./src/sim/save.js";
 
 STATE.sound = new SoundService();
 
 // ==================== SIMULATION CORE WIRING (ADR-0002 expand step) ====
 // The sim world (src/sim/world.js) owns traffic spawning, entry selection,
-// per-hop routing and the request lifecycle terminals. This layer supplies
-// the renderable request factory and implements the lifecycle hooks: score,
-// money, reputation, sounds, campaign notifications and mesh disposal. The
-// sim removes a request the moment it reaches a terminal state; the 500ms
-// red/pink death flash below is presentation only.
+// per-hop routing, the request lifecycle terminals and — since M1-c — every
+// economic settlement they trigger (income, score, reputation, maintenance
+// fees, serverless billing). This layer supplies the renderable request
+// factory and implements the lifecycle hooks for presentation only: sounds,
+// score display, campaign notifications and mesh disposal. The sim removes
+// a request the moment it reaches a terminal state; the 500ms red/pink
+// death flash below is presentation only.
 
 STATE.world.requestFactory = (world, type) => new Request(type);
 
 STATE.world.hooks = {
     onFinished(req, viaServiceType) {
         STATE.requestsProcessed++;
-        updateScore(req, "COMPLETED");
+        updateScoreUI();
         if (window.campaign?.active) {
             window.campaign.onRequestCompleted(req, viaServiceType);
         }
         req.destroy();
     },
     onFailed(req) {
-        const failType =
-            req.type === TRAFFIC_TYPES.MALICIOUS ? "MALICIOUS_PASSED" : "FAILED";
-        updateScore(req, failType);
+        if (req.type === TRAFFIC_TYPES.MALICIOUS) {
+            console.warn(
+                `MALICIOUS PASSED: ${CONFIG.survival.SCORE_POINTS.MALICIOUS_PASSED_REPUTATION} Rep. (Critical Failure)`
+            );
+        }
+        updateScoreUI();
         STATE.sound.playFail();
         req.mesh.material.color.setHex(CONFIG.colors.requestFail);
         setTimeout(() => req.destroy(), 500);
     },
     onThrottled(req) {
-        updateScore(req, "THROTTLED");
+        updateScoreUI();
         STATE.sound.playFail();
         req.mesh.material.color.setHex(CONFIG.colors.apigw); // Pink flash for throttled
         setTimeout(() => req.destroy(), 500);
     },
     onBlocked(req) {
-        updateScore(req, "MALICIOUS_BLOCKED");
+        updateScoreUI();
+        STATE.sound.playFraudBlocked();
         req.destroy();
     },
     onDiscarded(req) {
@@ -46,17 +58,15 @@ STATE.world.hooks = {
         STATE.sound.playSuccess();
         service.flashCacheHit();
     },
-    onServerlessCharge(service) {
-        // Lambda-style per-invocation billing, charged even on failures.
-        const cost = service.config.perRequestCost || 0;
-        STATE.money -= cost;
-        if (STATE.finances) {
-            STATE.finances.expenses.upkeep += cost;
-            STATE.finances.expenses.byService.serverless =
-                (STATE.finances.expenses.byService.serverless || 0) + cost;
-        }
-    },
 };
+
+// Economy policy hooks: whether upkeep time-scaling applies (survival only)
+// and the random-event cost spike stay web-side until the event system
+// migrates (M1-d).
+STATE.world.economy.upkeepScalingEnabled = () =>
+    STATE.gameMode === "survival" && CONFIG.survival.upkeepScaling.enabled;
+STATE.world.economy.externalCostMultiplier = () =>
+    STATE.intervention?.costMultiplier || 1.0;
 
 // ==================== UTILITY FUNCTIONS ====================
 
@@ -111,27 +121,10 @@ function calculateTargetRPS(gameTimeSeconds) {
     return targetRPS;
 }
 
+// Maintenance-fee escalation lives in the sim economy now (time factor ×
+// event cost spike, gated by the policy hooks wired at the top of this file).
 function getUpkeepMultiplier() {
-    if (STATE.gameMode !== "survival") return 1.0;
-    if (!CONFIG.survival.upkeepScaling.enabled) return 1.0;
-
-    const gameTime =
-        STATE.elapsedGameTime ?? (performance.now() - STATE.gameStartTime) / 1000;
-    const progress = Math.min(
-        gameTime / CONFIG.survival.upkeepScaling.scaleTime,
-        1.0
-    );
-
-    const base = CONFIG.survival.upkeepScaling.baseMultiplier;
-    const max = CONFIG.survival.upkeepScaling.maxMultiplier;
-
-    let multiplier = base + (max - base) * progress;
-
-    if (STATE.intervention?.costMultiplier) {
-        multiplier *= STATE.intervention.costMultiplier;
-    }
-
-    return multiplier;
+    return STATE.world.economy.upkeepMultiplier();
 }
 
 function updateMaliciousSpike(dt) {
@@ -1379,16 +1372,9 @@ function processAutoRepair(dt) {
     });
 }
 
+// Auto-repair overhead rate lives in the sim economy now.
 function getAutoRepairUpkeep() {
-    if (!STATE.autoRepairEnabled) return 0;
-
-    const percent = CONFIG.survival.degradation?.autoRepairCostPercent || 0.1;
-    // 10% of total service cost per second
-    const totalServiceCost = STATE.services.reduce(
-        (sum, s) => sum + s.config.cost,
-        0
-    );
-    return (totalServiceCost * percent) / 60; // Per second
+    return STATE.world.economy.autoRepairUpkeepPerSecond();
 }
 
 function retryWithSameArchitecture() {
@@ -1501,81 +1487,13 @@ function spawnRequest() {
     STATE.world.spawnRequest();
 }
 
-function updateScore(req, outcome) {
-    const points = CONFIG.survival.SCORE_POINTS;
-    const typeConfig = req.typeConfig || CONFIG.trafficTypes[req.type];
-
-    if (outcome === "MALICIOUS_BLOCKED") {
-        STATE.score.maliciousBlocked += points.MALICIOUS_BLOCKED_SCORE;
-        STATE.score.total += points.MALICIOUS_BLOCKED_SCORE;
-
-        // Mitigation cost for blocking attacks
-        const mitigationCost = CONFIG.survival.SCORE_POINTS.MALICIOUS_MITIGATION_COST || 1.0;
-        STATE.money -= mitigationCost;
-        if (STATE.finances) {
-            STATE.finances.expenses.mitigation = (STATE.finances.expenses.mitigation || 0) + mitigationCost;
-        }
-        STATE.sound.playFraudBlocked();
-    } else if (
-        req.type === TRAFFIC_TYPES.MALICIOUS &&
-        outcome === "MALICIOUS_PASSED"
-    ) {
-        STATE.reputation += points.MALICIOUS_PASSED_REPUTATION;
-        STATE.failures.MALICIOUS++;
-
-        // Breach penalty
-        const breachPenalty = CONFIG.survival.SCORE_POINTS.MALICIOUS_BREACH_PENALTY || 50.0;
-        STATE.money -= breachPenalty;
-        if (STATE.finances) {
-            STATE.finances.expenses.breach = (STATE.finances.expenses.breach || 0) + breachPenalty;
-        }
-
-        console.warn(
-            `MALICIOUS PASSED: ${points.MALICIOUS_PASSED_REPUTATION} Rep. (Critical Failure)`
-        );
-    } else if (outcome === "COMPLETED") {
-        let reward = typeConfig.reward;
-        const score = typeConfig.score;
-
-        if (req.cached) {
-            reward *= 1 + points.CACHE_HIT_BONUS;
-        }
-
-        if (typeConfig.destination === "s3" || typeConfig.destination === "cdn") {
-            STATE.score.storage += score;
-        } else if (typeConfig.destination === "db") {
-            STATE.score.database += score;
-        }
-
-        STATE.score.total += score;
-        STATE.money += reward;
-        if (STATE.finances) {
-            STATE.finances.income.requests += reward;
-            STATE.finances.income.total += reward;
-            // Track by request type
-            const reqType = req.type || "STATIC";
-            STATE.finances.income.byType[reqType] =
-                (STATE.finances.income.byType[reqType] || 0) + reward;
-            STATE.finances.income.countByType[reqType] =
-                (STATE.finances.income.countByType[reqType] || 0) + 1;
-        }
-        STATE.reputation += points.SUCCESS_REPUTATION || 0.5; // Gain reputation on success
-    } else if (outcome === "THROTTLED") {
-        // Soft fail from API Gateway rate limiting — much less reputation loss
-        STATE.reputation += points.THROTTLED_REPUTATION || -0.2;
-    } else if (outcome === "FAILED") {
-        STATE.reputation += points.FAIL_REPUTATION;
-        STATE.score.total -= (typeConfig.score || 5) / 2;
-        if (STATE.failures[req.type] !== undefined) {
-            STATE.failures[req.type]++;
-        }
-    }
-
-    updateScoreUI();
-}
+// Economic settlement (income, score, reputation, penalties) lives in the
+// simulation core now — see SimEconomy.settle, invoked from the lifecycle
+// terminals below. The hooks at the top of this file only present the
+// result (sounds, score display, death flashes).
 
 // Request lifecycle terminals live in the simulation core; the web-side
-// consequences (score, sound, death flash, mesh disposal) are implemented
+// consequences (sound, death flash, mesh disposal) are implemented
 // by STATE.world.hooks at the top of this file. These wrappers keep the
 // legacy call sites and window bridges working.
 function finishRequest(req, viaServiceType) {
@@ -1619,7 +1537,7 @@ function showMainMenu() {
 
     // Check for saved game and show/hide load button
     const loadBtn = document.getElementById("load-btn");
-    const hasSave = localStorage.getItem("serverSurvivalSave") !== null;
+    const hasSave = localStorage.getItem(SAVE_KEY) !== null;
     if (loadBtn) {
         loadBtn.style.display = hasSave ? "block" : "none";
     }
@@ -2032,12 +1950,6 @@ function createService(type, pos) {
     if (window.tutorial?.isActive) {
         window.tutorial.onAction("place", { type });
     }
-}
-
-function restoreService(serviceData, pos) {
-    const service = Service.restore(serviceData, pos);
-    STATE.services.push(service);
-    STATE.sound.playPlace();
 }
 
 function createConnection(fromId, toId) {
@@ -3083,12 +2995,8 @@ function animate(time) {
         typeof getAutoRepairUpkeep === "function" ? getAutoRepairUpkeep() : 0;
     const totalUpkeep = baseUpkeep * multiplier + autoRepairCost;
 
-    // Deduct auto-repair cost and track it
-    if (autoRepairCost > 0 && STATE.upkeepEnabled) {
-        const cost = autoRepairCost * dt;
-        STATE.money -= cost;
-        if (STATE.finances) STATE.finances.expenses.autoRepair += cost;
-    }
+    // Auto-repair overhead settles in the sim economy.
+    STATE.world.economy.chargeAutoRepair(dt);
 
     const upkeepDisplay = document.getElementById("upkeep-display");
     if (upkeepDisplay) {
@@ -3547,7 +3455,7 @@ function openMainMenu() {
 
     // Check for saved game and show/hide load button
     const loadBtn = document.getElementById("load-btn");
-    const hasSave = localStorage.getItem("serverSurvivalSave") !== null;
+    const hasSave = localStorage.getItem(SAVE_KEY) !== null;
     if (loadBtn) {
         loadBtn.style.display = hasSave ? "block" : "none";
     }
@@ -3589,32 +3497,19 @@ window.closeSaveModal = () => {
 // Function to save game state to localStorage or download as file (triggered from UI inside save modal)
 window.saveGameState = (saveAs = "browser") => {
     try {
-        const saveData = {
+        // The sim core owns the schema: web-layer state passes through as
+        // the bag, sim state (economy, topology, traffic mix) is serialized
+        // by the sim itself. Same key, same format as before M1-c.
+        const saveData = buildSaveData({
             timestamp: Date.now(),
-            version: "2.0",
-            ...STATE,
-            score: { ...STATE.score },
-            trafficDistribution: { ...STATE.trafficDistribution },
-            services: STATE.services.map((service) => ({
-                id: service.id,
-                type: service.type,
-                position: [service.position.x, service.position.y, service.position.z],
-                connections: [...service.connections],
-                tier: service.tier,
-                cacheHitRate: service.config.cacheHitRate || null,
-            })),
-            connections: STATE.connections.map((conn) => ({
-                from: conn.from,
-                to: conn.to,
-            })),
-            requests: [],
-            internetConnections: [...STATE.internetNode.connections],
-        };
+            state: STATE,
+            world: STATE.world,
+        });
 
         if(saveAs === "file")
             downloadSaveFile(saveData);
         else
-            localStorage.setItem("serverSurvivalSave", JSON.stringify(saveData));
+            localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
 
         const saveBtn = document.getElementById("btn-save");
         const originalColor = saveBtn.classList.contains("hover:border-green-500")
@@ -3681,45 +3576,6 @@ window.onSaveGameFileUpload = (event) => {
     event.target.value = "";
 }
 
-function migrateOldSave(saveData) {
-    if (saveData.trafficDistribution) {
-        const oldDist = saveData.trafficDistribution;
-        if ("WEB" in oldDist || "API" in oldDist || "FRAUD" in oldDist) {
-            saveData.trafficDistribution = {
-                STATIC: oldDist.WEB || 0,
-                READ: (oldDist.API || 0) * 0.5,
-                WRITE: (oldDist.API || 0) * 0.3,
-                UPLOAD: 0.05,
-                SEARCH: (oldDist.API || 0) * 0.2,
-                MALICIOUS: oldDist.FRAUD || 0,
-            };
-        }
-    }
-
-    if (saveData.score) {
-        const oldScore = saveData.score;
-        if ("web" in oldScore || "api" in oldScore || "fraudBlocked" in oldScore) {
-            saveData.score = {
-                total: oldScore.total || 0,
-                storage: oldScore.web || 0,
-                database: oldScore.api || 0,
-                maliciousBlocked: oldScore.fraudBlocked || 0,
-            };
-        }
-    }
-
-    if ("fraudSpikeTimer" in saveData) {
-        saveData.maliciousSpikeTimer = saveData.fraudSpikeTimer;
-        delete saveData.fraudSpikeTimer;
-    }
-    if ("fraudSpikeActive" in saveData) {
-        saveData.maliciousSpikeActive = saveData.fraudSpikeActive;
-        delete saveData.fraudSpikeActive;
-    }
-
-    return saveData;
-}
-
 // Function to load game state from localStorage (triggered from UI) or provided save data (provided from uploaded file)
 window.onClickContinueGame = () => {
     loadGameState();
@@ -3729,53 +3585,34 @@ function loadGameState(saveData = null) {
     try {
         // If saveData is not provided, attempt to load from localStorage
         if(!saveData){
-            const saveDataStr = localStorage.getItem("serverSurvivalSave");
+            const saveDataStr = localStorage.getItem(SAVE_KEY);
             if (!saveDataStr) {
                 alert(i18n.t('no_save_found_msg'));
                 return;
             }
-    
+
             saveData = JSON.parse(saveDataStr);
-    
+
         }
 
-        // Migrate old saves if version is missing or 1.0
-        if (!saveData.version || saveData.version === "1.0") {
-            saveData = migrateOldSave(saveData);
-        }
+        // Migrate old saves if version is missing or 1.0 (sim-core schema)
+        saveData = normalizeSave(saveData);
 
         clearCurrentGame();
 
-        STATE.money = saveData.money || 0;
-        STATE.reputation = saveData.reputation || 100;
         STATE.requestsProcessed = saveData.requestsProcessed || 0;
-        STATE.score = { ...saveData.score } || {
-            total: 0,
-            storage: 0,
-            database: 0,
-            maliciousBlocked: 0,
-        };
         STATE.activeTool = saveData.activeTool || "select";
         STATE.selectedNodeId = saveData.selectedNodeId || null;
         STATE.lastTime = performance.now(); // Reset timing
         STATE.spawnTimer = saveData.spawnTimer || 0;
         STATE.currentRPS = saveData.currentRPS || 0.5;
         STATE.timeScale = saveData.timeScale || 0; // Start paused
-        STATE.elapsedGameTime = saveData.elapsedGameTime ?? 0;
         STATE.isRunning = saveData.isRunning || false;
         STATE.gameStartTime = performance.now();
 
         STATE.gameMode = saveData.gameMode || "survival";
         STATE.sandboxBudget = saveData.sandboxBudget || 2000;
         STATE.upkeepEnabled = saveData.upkeepEnabled !== false;
-        STATE.trafficDistribution = { ...saveData.trafficDistribution } || {
-            STATIC: 0.3,
-            READ: 0.2,
-            WRITE: 0.15,
-            UPLOAD: 0.05,
-            SEARCH: 0.1,
-            MALICIOUS: 0.2,
-        };
         STATE.burstCount = saveData.burstCount || 10;
         STATE.gameStarted = saveData.gameStarted || true;
         STATE.previousTimeScale = saveData.previousTimeScale || 1;
@@ -3803,37 +3640,29 @@ function loadGameState(saveData = null) {
             STATE.autoRepairEnabled = saveData.autoRepairEnabled || false;
         }
 
-        // Restore finances from the save (fall back to zeroed defaults for older
-        // saves that predate finance tracking). Previously this always reset to
-        // zero, so every reload wiped the player's income/expense history even
-        // though saveGameState had written it to disk.
-        const defaultFinances = {
-            income: {
-                byType: { STATIC: 0, READ: 0, WRITE: 0, UPLOAD: 0, SEARCH: 0 },
-                countByType: { STATIC: 0, READ: 0, WRITE: 0, UPLOAD: 0, SEARCH: 0, blocked: 0 },
-                requests: 0,
-                blocked: 0,
-                total: 0,
+        // Sim-owned state — economy books (money/reputation/score/finances,
+        // with zeroed-ledger defaults for saves that predate finance
+        // tracking), game clock, traffic mix, services and connections —
+        // restores through the sim core. This layer injects the renderable
+        // service factory and the mesh-drawing, topology-validated
+        // createConnection.
+        restoreWorld(STATE.world, saveData, {
+            createService: (data) =>
+                new Service(
+                    data.type,
+                    new THREE.Vector3(
+                        data.position[0],
+                        data.position[1],
+                        data.position[2]
+                    )
+                ),
+            onServiceRestored: (service) => {
+                service.mesh.userData.id = service.id;
+                service.drawTierRings();
+                STATE.sound.playPlace();
             },
-            expenses: {
-                services: 0,
-                upkeep: 0,
-                repairs: 0,
-                autoRepair: 0,
-                mitigation: 0,
-                breach: 0,
-                byService: { waf: 0, alb: 0, compute: 0, db: 0, s3: 0, cache: 0, sqs: 0, search: 0, replica: 0, apigw: 0, nosql: 0, cdn: 0, serverless: 0 },
-                countByService: { waf: 0, alb: 0, compute: 0, db: 0, s3: 0, cache: 0, sqs: 0, search: 0, replica: 0, apigw: 0, nosql: 0, cdn: 0, serverless: 0 },
-            },
-        };
-        STATE.finances = saveData.finances
-            ? {
-                income: { ...defaultFinances.income, ...saveData.finances.income },
-                expenses: { ...defaultFinances.expenses, ...saveData.finances.expenses },
-            }
-            : defaultFinances;
-
-        restoreServices(saveData.services);
+            connect: createConnection,
+        });
 
         const autoRepairBtn = document.getElementById("auto-repair-toggle");
         if (autoRepairBtn) {
@@ -3848,11 +3677,6 @@ function loadGameState(saveData = null) {
             }
         }
         updateRepairCostTable();
-
-        restoreConnections(
-            saveData.connections,
-            saveData.internetConnections || []
-        );
 
         updateScoreUI();
         document.getElementById("money-display").innerText = `$${Math.floor(
@@ -3923,29 +3747,6 @@ function clearCurrentGame() {
     STATE.requests = [];
     STATE.connections = [];
     STATE.internetNode.connections = [];
-}
-
-function restoreServices(savedServices) {
-    savedServices.forEach((serviceData) => {
-        const position = new THREE.Vector3(
-            serviceData.position[0],
-            serviceData.position[1],
-            serviceData.position[2]
-        );
-
-        restoreService(serviceData, position);
-    });
-}
-
-function restoreConnections(savedConnections, internetConnections) {
-    // internetConnections is an array of service IDs (strings), not objects
-    internetConnections.forEach((serviceId) => {
-        createConnection("internet", serviceId);
-    });
-
-    savedConnections.forEach((connData) => {
-        createConnection(connData.from, connData.to);
-    });
 }
 
 // ==================== M0 TOUCH SPIKE (issue #2 — throwaway) ====================
@@ -4119,7 +3920,6 @@ window.removeRequest = removeRequest;
 window.requestGroup = requestGroup;
 window.serviceGroup = serviceGroup;
 window.throttleRequest = throttleRequest;
-window.updateScore = updateScore;
 window.renderCampaignObjectives = renderCampaignObjectives;
 window.showCampaignDebrief = showCampaignDebrief;
 window.spawnRequest = spawnRequest;
