@@ -20,7 +20,7 @@ import "./config.js";
 import "./state.js";
 import "./entities/Request.js";
 import "./entities/Service.js";
-import "./services/SoundService.js";
+import "./platform/audio.js";
 import "./tutorial.js";
 import "./campaign/objectives.js";
 import "./campaign/diagram.js";
