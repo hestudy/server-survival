@@ -8,8 +8,8 @@
 // malicious traffic here), and the processing loop that decides each
 // finished job's next hop or terminal state. Maintenance fees and
 // serverless per-request billing settle through world.economy (M1-c);
-// health degradation stays in the web layer until the event system
-// migrates (M1-d) — the sim only reads `health`.
+// health decay under load and the passive idle regen live here too (M1-d),
+// gated by the world's degradationEnabled game-mode policy.
 
 /**
  * Calculates the percentage if failure based on the load of the node.
@@ -34,9 +34,9 @@ export class SimService {
         this.tier = 1;
         this.rrIndex = 0;
 
-        // Service health for degradation mechanic. Decay/repair live in the
-        // web layer until the event system migrates (M1-d); the sim reads
-        // health for effective capacity and failure chance.
+        // Service health for the degradation mechanic (服务健康退化):
+        // decays under load, regenerates when idle, reduces effective
+        // capacity and raises failure chance when critical.
         this.health = 100;
     }
 
@@ -123,6 +123,29 @@ export class SimService {
     }
 
     update(dt) {
+        // Health degradation: always decay when handling any traffic (faster
+        // at higher loads); passively regenerate when idle. Runs before the
+        // routing pipeline so this frame's effective capacity already sees
+        // the decayed health — the historical frame order.
+        const degradeConfig = this.world.config.survival.degradation;
+        if (degradeConfig?.enabled && this.world.degradationEnabled()) {
+            const load = this.totalLoad;
+            if (load > 0.05) {
+                // Base decay + load-based acceleration: 0.5x at low load,
+                // 2x at full load.
+                const loadMultiplier = 0.5 + load * 1.5;
+                this.health = Math.max(
+                    0,
+                    this.health - degradeConfig.healthDecayRate * loadMultiplier * dt
+                );
+            } else if (degradeConfig.autoRepairRate > 0 && this.health < 100) {
+                this.health = Math.min(
+                    100,
+                    this.health + degradeConfig.autoRepairRate * dt
+                );
+            }
+        }
+
         // Maintenance fee (with its time escalation) settles in the economy.
         this.world.economy.chargeUpkeep(this, dt);
 

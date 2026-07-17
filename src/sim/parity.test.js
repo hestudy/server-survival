@@ -165,6 +165,10 @@ describe("economy parity with the pre-migration implementation", () => {
         });
         const economy = world.economy;
         economy.autoRepairEnabled = true;
+        // The reference implementation predates the event system (M1-d): a
+        // random COST_SPIKE would double the sim's upkeep but not the
+        // reference's. Event behavior has its own suite (events.test.js).
+        world.events.enabled = () => false;
 
         // A realistic mid-game architecture exercising every billing point:
         // WAF entry, gateway throttling, serverless per-request billing,

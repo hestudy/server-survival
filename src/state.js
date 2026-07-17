@@ -58,35 +58,6 @@ const STATE = {
 
     // Balance overhaul state
     gameStartTime: 0,
-    maliciousSpikeTimer: 0,
-    maliciousSpikeActive: false,
-    normalTrafficDist: null,
-
-    // Intervention mechanics state
-    intervention: {
-        // Traffic shift state
-        trafficShiftTimer: 0,
-        trafficShiftActive: false,
-        currentShift: null,
-        originalTrafficDist: null,
-
-        // Random events state
-        randomEventTimer: 0,
-        activeEvent: null,
-        eventEndTime: 0,
-        pausedEvent: null,
-        remainingTime: 0,
-
-        // RPS milestone tracking
-        currentMilestoneIndex: 0,
-        rpsMultiplier: 1.0,
-
-        // Event history for UI
-        recentEvents: [],
-
-        // Warning state
-        warnings: []
-    },
 
     // Campaign mode runtime state. Populated by CampaignController when active.
     campaign: {
@@ -149,6 +120,46 @@ Object.defineProperties(STATE, {
         set(v) { world.time = v; },
     },
 });
+
+// Event-system aliases (M1-d): spike, shift, random-event and milestone
+// state lives in the sim events module. Enumerable so the save payload
+// keeps carrying the historical field names (loaders reset them anyway).
+const eventsAlias = (name) => ({
+    enumerable: true,
+    get() { return world.events[name]; },
+    set(v) { world.events[name] = v; },
+});
+Object.defineProperties(STATE, {
+    maliciousSpikeTimer: eventsAlias("maliciousSpikeTimer"),
+    maliciousSpikeActive: eventsAlias("maliciousSpikeActive"),
+    normalTrafficDist: eventsAlias("normalTrafficDist"),
+});
+
+// STATE.intervention keeps its historical shape for the UI code and the
+// save payload, but every sim-owned field delegates to world.events; only
+// the presentation history (warnings, recentEvents) stays web-side. Note
+// eventEndTime/eventDuration are sim-clock seconds since M1-d, no longer
+// Date.now() milliseconds.
+const intervention = {
+    recentEvents: [],
+    warnings: [],
+};
+Object.defineProperties(intervention, {
+    trafficShiftTimer: eventsAlias("trafficShiftTimer"),
+    trafficShiftActive: eventsAlias("trafficShiftActive"),
+    currentShift: eventsAlias("currentShift"),
+    originalTrafficDist: eventsAlias("originalTrafficDist"),
+    randomEventTimer: eventsAlias("randomEventTimer"),
+    activeEvent: eventsAlias("activeEvent"),
+    eventEndTime: eventsAlias("eventEndTime"),
+    eventDuration: eventsAlias("eventDuration"),
+    outageServiceId: eventsAlias("outageServiceId"),
+    costMultiplier: eventsAlias("costMultiplier"),
+    trafficBurstMultiplier: eventsAlias("trafficBurstMultiplier"),
+    currentMilestoneIndex: eventsAlias("currentMilestoneIndex"),
+    rpsMultiplier: eventsAlias("rpsMultiplier"),
+});
+STATE.intervention = intervention;
 
 // Transitional global bridge (ADR-0002 expand step): shared with the other
 // legacy scripts, which still resolve this as a global.

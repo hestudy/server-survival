@@ -9,8 +9,15 @@ export const STEP = 0.05;
 
 export function recordingHooks() {
     const events = [];
+    // Event-system records stamp the sim clock so tests can assert trigger
+    // timing precisely; bind() is called by makeWorld once the world exists.
+    let world = null;
+    const t = () => (world ? world.time : null);
     return {
         events,
+        bind(w) {
+            world = w;
+        },
         of(kind) {
             return events.filter((ev) => ev.e === kind);
         },
@@ -24,6 +31,34 @@ export function recordingHooks() {
             events.push({ e: "blocked", id: req.id, type: req.type }),
         onDiscarded: (req) =>
             events.push({ e: "discarded", id: req.id, type: req.type }),
+        // ---- event system (M1-d) ----------------------------------------
+        onMaliciousWarning: () =>
+            events.push({ e: "maliciousWarning", t: t() }),
+        onMaliciousSpikeStart: () =>
+            events.push({ e: "spikeStart", t: t() }),
+        onMaliciousSpikeEnd: () =>
+            events.push({ e: "spikeEnd", t: t() }),
+        onTrafficShiftStart: (shift) =>
+            events.push({ e: "shiftStart", t: t(), name: shift.name }),
+        onTrafficShiftEnd: (shift) =>
+            events.push({ e: "shiftEnd", t: t(), name: shift?.name }),
+        onEventStart: (type, detail) =>
+            events.push({
+                e: "eventStart",
+                t: t(),
+                type,
+                serviceId: detail?.service?.id ?? null,
+            }),
+        onEventEnd: (type) =>
+            events.push({ e: "eventEnd", t: t(), type }),
+        onRpsMilestone: (milestone, index) =>
+            events.push({
+                e: "rpsMilestone",
+                t: t(),
+                time: milestone.time,
+                multiplier: milestone.multiplier,
+                index,
+            }),
     };
 }
 
@@ -33,7 +68,8 @@ export function recordingHooks() {
 export function makeWorld(opts = {}) {
     const hooks = recordingHooks();
     const world = new SimWorld({ rng: () => 0.999999, hooks, ...opts });
-    return { world, hooks, economy: world.economy };
+    hooks.bind(world);
+    return { world, hooks, economy: world.economy, events: world.events };
 }
 
 export function wire(world, from, to) {

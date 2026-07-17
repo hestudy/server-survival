@@ -1,10 +1,9 @@
 import { SimService } from "../sim/service.js";
 
 // Web-layer service: the simulation core (SimService) owns queueing,
-// per-hop routing, maintenance fees and repair settlement; this subclass
-// adds the Three.js meshes plus the parts that have not migrated into the
-// sim yet — health degradation (M1-d) — and the visual load/health
-// indicators.
+// per-hop routing, maintenance fees, repair settlement and health
+// degradation; this subclass adds the Three.js meshes and the visual
+// load/health indicators.
 class Service extends SimService {
   constructor(type, pos) {
     super(STATE.world, type);
@@ -228,33 +227,14 @@ class Service extends SimService {
   }
 
   update(dt) {
-    // Service degradation mechanic (stays web-side until the event system
-    // migrates in M1-d; the sim reads this.health for capacity/failure).
+    // Health decay/regen numbers live in the sim core (SimService); this
+    // layer only repaints the health visuals each frame.
     if (CONFIG.survival.degradation?.enabled && STATE.gameMode === "survival") {
-      const degradeConfig = CONFIG.survival.degradation;
-      const load = this.totalLoad;
-
-      // Always degrade when handling any traffic, faster at higher loads
-      if (load > 0.05) {
-        // Base decay + load-based acceleration
-        const loadMultiplier = 0.5 + load * 1.5; // 0.5x at low load, 2x at full load
-        const degradeAmount =
-          degradeConfig.healthDecayRate * loadMultiplier * dt;
-        this.health = Math.max(0, this.health - degradeAmount);
-      } else if (degradeConfig.autoRepairRate > 0 && this.health < 100) {
-        // Auto-repair when idle (only if enabled)
-        this.health = Math.min(
-          100,
-          this.health + degradeConfig.autoRepairRate * dt
-        );
-      }
-
-      // Update visual appearance based on health
       this.updateHealthVisual();
     }
 
-    // Simulation core: maintenance fee, rate window, compute pull, queue
-    // admission, routing.
+    // Simulation core: health degradation, maintenance fee, rate window,
+    // compute pull, queue admission, routing.
     super.update(dt);
 
     if (this.totalLoad > 0.8) {

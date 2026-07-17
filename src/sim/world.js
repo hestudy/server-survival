@@ -3,14 +3,17 @@
 // randomness through the injected rng. Build a world, add services, connect
 // them, inject traffic, step(dt), then assert terminal states.
 //
-// What lives here (M1-b/M1-c): traffic spawning, entry selection, per-hop
-// routing (in SimService), the request lifecycle terminals (finish / fail /
-// throttle / block / remove), and — via `economy` — every settlement those
-// terminals trigger: income, scoring, reputation, maintenance fees, repair
-// and serverless billing. Sounds and visuals are the caller's business: the
-// web layer subscribes via `hooks` for presentation only.
+// What lives here (M1-b/M1-c/M1-d): traffic spawning, entry selection,
+// per-hop routing (in SimService), the request lifecycle terminals (finish /
+// fail / throttle / block / remove), the event system (via `events`: spikes,
+// shifts, random events, RPS milestones), service health, and — via
+// `economy` — every settlement those terminals trigger: income, scoring,
+// reputation, maintenance fees, repair and serverless billing. Sounds and
+// visuals are the caller's business: the web layer subscribes via `hooks`
+// for presentation only.
 import { CONFIG, TRAFFIC_TYPES } from "../config.js";
 import { SimEconomy } from "./economy.js";
+import { SimEvents } from "./events.js";
 import { SimRequest, releaseInFlightSlot } from "./request.js";
 import { SimService } from "./service.js";
 
@@ -46,6 +49,13 @@ export class SimWorld {
         // own frame clock via the STATE.elapsedGameTime alias.
         this.time = 0;
         this.economy = new SimEconomy(this);
+        this.events = new SimEvents(this);
+        // The random-event cost spike feeds straight into upkeep — no
+        // web-layer wiring needed since M1-d.
+        this.economy.externalCostMultiplier = () => this.events.costMultiplier;
+        // Game-mode policy for health degradation (survival only). Headless
+        // worlds default to "on"; the web layer injects the mode gate.
+        this.degradationEnabled = () => true;
         this.trafficDistribution =
             trafficDistribution || { ...config.survival.trafficDistribution };
 
@@ -201,11 +211,28 @@ export class SimWorld {
 
     // Advance the simulation. Mirrors the frame order of the web game loop:
     // the clock advances first, then services route/process, then in-flight
-    // requests move.
+    // requests move, then the event system ticks, then auto-repair heals.
     step(dt) {
         this.time += dt;
         this.services.forEach((s) => s.update(dt));
         this.requests.forEach((r) => r.update(dt));
+        this.events.update(dt);
+        this.processAutoRepair(dt);
+    }
+
+    // Active auto-repair: heal 5 hp/s on every damaged service while the
+    // (paid — see economy.chargeAutoRepair) toggle is on. The passive idle
+    // regen lives in SimService.update.
+    processAutoRepair(dt) {
+        if (!this.economy.autoRepairEnabled) return;
+        if (!this.config.survival.degradation?.enabled) return;
+        if (!this.degradationEnabled()) return;
+
+        this.services.forEach((service) => {
+            if (service.health < 100) {
+                service.health = Math.min(100, service.health + 5 * dt);
+            }
+        });
     }
 
     // Serverless per-invocation billing point (called by SimService at every
