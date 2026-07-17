@@ -1,9 +1,11 @@
+import { storage } from './platform/storage.js';
+
 /**
  * Simple i18n manager for the game
  */
 class I18nManager {
     constructor() {
-        this.currentLocale = localStorage.getItem('game_locale') || 'en';
+        this.currentLocale = storage.get('game_locale') || 'en';
         this.translations = {
             en: typeof EN_TRANSLATIONS !== 'undefined' ? EN_TRANSLATIONS : {},
             zh: typeof ZH_TRANSLATIONS !== 'undefined' ? ZH_TRANSLATIONS : {},
@@ -22,7 +24,7 @@ class I18nManager {
         console.log(this.translations);
         if (this.translations[locale]) {
             this.currentLocale = locale;
-            localStorage.setItem('game_locale', locale);
+            storage.set('game_locale', locale);
             this.applyTranslations();
             // Dispatch event for components that need to update manually
             window.dispatchEvent(new CustomEvent('localeChanged', { detail: locale }));

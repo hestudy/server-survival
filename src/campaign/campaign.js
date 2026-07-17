@@ -1,3 +1,5 @@
+import { storage } from '../platform/storage.js';
+
 // Campaign mode controller. Owns level lifecycle, objective evaluation,
 // win/lose detection, and progress persistence.
 //
@@ -21,7 +23,7 @@ class CampaignController {
 
     loadProgress() {
         try {
-            const raw = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
+            const raw = storage.get(CAMPAIGN_STORAGE_KEY);
             if (!raw) return this._emptyProgress();
             const parsed = JSON.parse(raw);
             if (parsed.version !== CAMPAIGN_PROGRESS_VERSION) return this._emptyProgress();
@@ -33,7 +35,7 @@ class CampaignController {
     }
 
     saveProgress(progress) {
-        localStorage.setItem(CAMPAIGN_STORAGE_KEY, JSON.stringify(progress));
+        storage.set(CAMPAIGN_STORAGE_KEY, JSON.stringify(progress));
     }
 
     _emptyProgress() {

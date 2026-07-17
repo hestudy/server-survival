@@ -5,6 +5,9 @@ import {
     normalizeSave,
     restoreWorld,
 } from "./src/sim/save.js";
+import { storage } from "./src/platform/storage.js";
+import { SoundService, playClickSfx, playSelectSfx } from "./src/platform/audio.js";
+import { createWebInputSource } from "./src/platform/input.js";
 
 STATE.sound = new SoundService();
 
@@ -718,6 +721,9 @@ function showSmartHint(hint) {
 // ==================== END BALANCE OVERHAUL FUNCTIONS ====================
 
 const container = document.getElementById("canvas-container");
+// Raw input (pointer/touch/wheel/keyboard/blur/resize) is subscribed through
+// the platform input adapter — never via addEventListener here (ADR-0002).
+const input = createWebInputSource(container);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(CONFIG.colors.bg);
 scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.008);
@@ -1249,7 +1255,7 @@ function showMainMenu() {
 
     // Check for saved game and show/hide load button
     const loadBtn = document.getElementById("load-btn");
-    const hasSave = localStorage.getItem(SAVE_KEY) !== null;
+    const hasSave = storage.get(SAVE_KEY) !== null;
     if (loadBtn) {
         loadBtn.style.display = hasSave ? "block" : "none";
     }
@@ -1718,12 +1724,12 @@ function createConnection(fromId, toId) {
     else if (t1 === "serverless" && t2 === "replica") valid = true;
 
     if (!valid) {
-        new Audio("assets/sounds/click-9.mp3").play();
+        playClickSfx();
         console.error(i18n.t('invalid_topology_detailed'));
         return;
     }
 
-    new Audio("assets/sounds/click-5.mp3").play();
+    playSelectSfx();
 
     from.connections.push(toId);
     const pts = [from.position.clone(), to.position.clone()];
@@ -1869,7 +1875,7 @@ window.setTool = (t) => {
         .querySelectorAll(".service-btn")
         .forEach((b) => b.classList.remove("active"));
     document.getElementById(`tool-${t}`).classList.add("active");
-    new Audio("assets/sounds/click-9.mp3").play();
+    playClickSfx();
 };
 
 window.setTimeScale = (s) => {
@@ -1926,7 +1932,7 @@ const minZoom = 0.5;
 const maxZoom = 3.0;
 const zoomSpeed = 0.001;
 
-container.addEventListener("wheel", (e) => {
+input.on("wheel", (e) => {
     e.preventDefault();
 
     // Zoom logic
@@ -2004,24 +2010,24 @@ if (upgradeIndicator) {
 // Keyboard navigation
 const keysPressed = {};
 
-window.addEventListener("keydown", (e) => {
+input.on("keydown", (e) => {
     keysPressed[e.key] = true;
 });
 
-window.addEventListener("keyup", (e) => {
+input.on("keyup", (e) => {
     keysPressed[e.key] = false;
 });
 
 // Clear all held keys when the window loses focus — otherwise a keyup missed
 // during an alt-tab / focus switch leaves the key "stuck" and the camera pans
 // forever until that key is pressed and released again.
-window.addEventListener("blur", () => {
+input.on("blur", () => {
     for (const k in keysPressed) keysPressed[k] = false;
 });
 
-container.addEventListener("contextmenu", (e) => e.preventDefault());
+input.on("contextmenu", (e) => e.preventDefault());
 
-container.addEventListener("mousedown", (e) => {
+input.on("mousedown", (e) => {
     if (!STATE.isRunning) return;
 
     if (e.button === 2 || e.button === 1) {
@@ -2073,7 +2079,7 @@ container.addEventListener("mousedown", (e) => {
         if (conn) {
             deleteConnection(conn.from, conn.to);
         } else {
-            new Audio("assets/sounds/click-9.mp3").play();
+            playClickSfx();
         }
     } else if (
         STATE.activeTool === "connect" &&
@@ -2084,7 +2090,7 @@ container.addEventListener("mousedown", (e) => {
             STATE.selectedNodeId = null;
         } else {
             STATE.selectedNodeId = i.id;
-            new Audio("assets/sounds/click-5.mp3").play();
+            playSelectSfx();
         }
     } else if (
         ["waf", "alb", "lambda", "db", "nosql", "s3", "sqs", "cache", "cdn", "apigw", "search", "replica", "serverless"].includes(
@@ -2145,11 +2151,11 @@ container.addEventListener("mousedown", (e) => {
 // refresh the hover tooltip in real time while the mouse is stationary (#173).
 let lastPointerPos = null;
 let tooltipRefreshAcc = 0;
-container.addEventListener("mouseleave", () => {
+input.on("mouseleave", () => {
     lastPointerPos = null;
 });
 
-container.addEventListener("mousemove", (e) => {
+input.on("mousemove", (e) => {
     lastPointerPos = { x: e.clientX, y: e.clientY };
     if (isDraggingNode && draggedNode) {
         const hit = getIntersect(e.clientX, e.clientY);
@@ -2479,7 +2485,7 @@ function setupUITooltips() {
 // Call setup
 setupUITooltips();
 
-container.addEventListener("mouseup", (e) => {
+input.on("mouseup", (e) => {
     if (e.button === 2 || e.button === 1) {
         isPanning = false;
         container.style.cursor = "default";
@@ -2669,9 +2675,63 @@ function animate(time) {
     // its hooks drive the warnings/indicators drawn by this layer.
     STATE.world.events.update(dt);
 
+    // Auto-repair: pick repair targets, then settle the overhead in the
+    // sim economy.
+    processAutoRepair(dt);
+    STATE.world.economy.chargeAutoRepair(dt);
+
+    // Reputation gains cap at 100.
+    STATE.reputation = Math.min(100, STATE.reputation);
+
+    // Game over only in survival mode. Last game-logic block of the frame:
+    // everything after it only reads state and paints (issue #7 渲染层单向
+    // 消费).
+    if (
+        STATE.gameMode === "survival" &&
+        (STATE.reputation <= 0 || STATE.money <= -1000)
+    ) {
+        STATE.isRunning = false;
+
+        // Determine failure reason and generate tips
+        const failureAnalysis = analyzeFailure();
+
+        document.getElementById("modal-title").innerText = i18n.t('system_failure');
+        document.getElementById("modal-title").classList.add("text-red-500");
+        document.getElementById("modal-desc").innerHTML = `
+            <div class="text-left space-y-3">
+                <div class="text-center text-2xl font-bold text-yellow-400 mb-2">${i18n.t('final_score', { score: STATE.score.total })}</div>
+                <div class="text-center text-sm text-gray-400 mb-4">${i18n.t('survived_time', { time: formatTime(STATE.elapsedGameTime || 0) })}</div>
+
+                <div class="bg-red-900/30 border border-red-500/50 rounded-lg p-3">
+                    <div class="text-red-400 font-bold text-sm uppercase mb-1">${i18n.t('failure_reason')}</div>
+                    <div class="text-white">${failureAnalysis.reason}</div>
+                </div>
+
+                <div class="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
+                    <div class="text-blue-400 font-bold text-sm uppercase mb-1">${i18n.t('analysis')}</div>
+                    <div class="text-gray-300 text-sm">${failureAnalysis.description}</div>
+                </div>
+
+                <div class="bg-green-900/30 border border-green-500/50 rounded-lg p-3">
+                    <div class="text-green-400 font-bold text-sm uppercase mb-1">${i18n.t('tips_title')}</div>
+                    <ul class="text-gray-300 text-sm list-disc list-inside space-y-1">
+                        ${failureAnalysis.tips
+                .map((tip) => `<li>${tip}</li>`)
+                .join("")}
+                    </ul>
+                </div>
+            </div>
+        `;
+        document.getElementById("modal").classList.remove("hidden");
+        // show the results card , now has an id
+        document.getElementById("modal-card").classList.remove("hidden");
+        // hide the "show results" floating button , new element
+        document.getElementById("modal-restore").classList.add("hidden");
+        STATE.sound.playGameOver();
+    }
+
     updateServiceHealthIndicators();
     updateActiveEventTimer();
-    processAutoRepair(dt);
     updateFinancesDisplay();
     checkSmartHints();
 
@@ -2684,10 +2744,7 @@ function animate(time) {
         if (lastPointerPos && !isDraggingNode && !isPanning) {
             const tooltipEl = document.getElementById("tooltip");
             if (tooltipEl && tooltipEl.style.display === "block") {
-                container.dispatchEvent(new MouseEvent("mousemove", {
-                    clientX: lastPointerPos.x,
-                    clientY: lastPointerPos.y,
-                }));
+                input.replayMouse("mousemove", lastPointerPos.x, lastPointerPos.y);
             }
         }
     }
@@ -2705,9 +2762,6 @@ function animate(time) {
     const autoRepairCost =
         typeof getAutoRepairUpkeep === "function" ? getAutoRepairUpkeep() : 0;
     const totalUpkeep = baseUpkeep * multiplier + autoRepairCost;
-
-    // Auto-repair overhead settles in the sim economy.
-    STATE.world.economy.chargeAutoRepair(dt);
 
     const upkeepDisplay = document.getElementById("upkeep-display");
     if (upkeepDisplay) {
@@ -2753,7 +2807,6 @@ function animate(time) {
                 Math.round((STATE.trafficDistribution.MALICIOUS || 0) * 100) + "%";
     }
 
-    STATE.reputation = Math.min(100, STATE.reputation);
     document.getElementById("rep-bar").style.width = `${Math.max(
         0,
         STATE.reputation
@@ -2867,51 +2920,6 @@ function animate(time) {
         }
     }
 
-    // Game over only in survival mode
-    if (
-        STATE.gameMode === "survival" &&
-        (STATE.reputation <= 0 || STATE.money <= -1000)
-    ) {
-        STATE.isRunning = false;
-
-        // Determine failure reason and generate tips
-        const failureAnalysis = analyzeFailure();
-
-        document.getElementById("modal-title").innerText = i18n.t('system_failure');
-        document.getElementById("modal-title").classList.add("text-red-500");
-        document.getElementById("modal-desc").innerHTML = `
-            <div class="text-left space-y-3">
-                <div class="text-center text-2xl font-bold text-yellow-400 mb-2">${i18n.t('final_score', { score: STATE.score.total })}</div>
-                <div class="text-center text-sm text-gray-400 mb-4">${i18n.t('survived_time', { time: formatTime(STATE.elapsedGameTime || 0) })}</div>
-                
-                <div class="bg-red-900/30 border border-red-500/50 rounded-lg p-3">
-                    <div class="text-red-400 font-bold text-sm uppercase mb-1">${i18n.t('failure_reason')}</div>
-                    <div class="text-white">${failureAnalysis.reason}</div>
-                </div>
-                
-                <div class="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
-                    <div class="text-blue-400 font-bold text-sm uppercase mb-1">${i18n.t('analysis')}</div>
-                    <div class="text-gray-300 text-sm">${failureAnalysis.description}</div>
-                </div>
-                
-                <div class="bg-green-900/30 border border-green-500/50 rounded-lg p-3">
-                    <div class="text-green-400 font-bold text-sm uppercase mb-1">${i18n.t('tips_title')}</div>
-                    <ul class="text-gray-300 text-sm list-disc list-inside space-y-1">
-                        ${failureAnalysis.tips
-                .map((tip) => `<li>${tip}</li>`)
-                .join("")}
-                    </ul>
-                </div>
-            </div>
-        `;
-        document.getElementById("modal").classList.remove("hidden");
-        // show the results card , now has an id
-        document.getElementById("modal-card").classList.remove("hidden");
-        // hide the "show results" floating button , new element
-        document.getElementById("modal-restore").classList.add("hidden");
-        STATE.sound.playGameOver();
-    }
-
     renderer.render(scene, camera);
 }
 
@@ -3019,7 +3027,7 @@ function analyzeFailure() {
     return result;
 }
 
-window.addEventListener("resize", () => {
+input.on("resize", () => {
     const aspect = window.innerWidth / window.innerHeight;
     camera.left = -d * aspect;
     camera.right = d * aspect;
@@ -3029,7 +3037,7 @@ window.addEventListener("resize", () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-document.addEventListener("keydown", (event) => {
+input.on("keydown", (event) => {
     if (event.key === "Escape") {
         // Toggle main menu
         const menu = document.getElementById("main-menu-modal");
@@ -3166,7 +3174,7 @@ function openMainMenu() {
 
     // Check for saved game and show/hide load button
     const loadBtn = document.getElementById("load-btn");
-    const hasSave = localStorage.getItem(SAVE_KEY) !== null;
+    const hasSave = storage.get(SAVE_KEY) !== null;
     if (loadBtn) {
         loadBtn.style.display = hasSave ? "block" : "none";
     }
@@ -3220,7 +3228,7 @@ window.saveGameState = (saveAs = "browser") => {
         if(saveAs === "file")
             downloadSaveFile(saveData);
         else
-            localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+            storage.set(SAVE_KEY, JSON.stringify(saveData));
 
         const saveBtn = document.getElementById("btn-save");
         const originalColor = saveBtn.classList.contains("hover:border-green-500")
@@ -3296,7 +3304,7 @@ function loadGameState(saveData = null) {
     try {
         // If saveData is not provided, attempt to load from localStorage
         if(!saveData){
-            const saveDataStr = localStorage.getItem(SAVE_KEY);
+            const saveDataStr = storage.get(SAVE_KEY);
             if (!saveDataStr) {
                 alert(i18n.t('no_save_found_msg'));
                 return;
@@ -3486,22 +3494,14 @@ function touchHideHoverUI() {
 }
 
 function touchSyntheticMouse(type, x, y) {
-    container.dispatchEvent(
-        new MouseEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            clientX: x,
-            clientY: y,
-            button: 0,
-        })
-    );
+    input.replayMouse(type, x, y);
 }
 
 function touchPinchDist(t) {
     return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
 }
 
-container.addEventListener(
+input.on(
     "touchstart",
     (e) => {
         e.preventDefault(); // suppress browser-emulated mouse events & scrolling
@@ -3522,7 +3522,7 @@ container.addEventListener(
     { passive: false }
 );
 
-container.addEventListener(
+input.on(
     "touchmove",
     (e) => {
         e.preventDefault();
@@ -3564,7 +3564,7 @@ container.addEventListener(
     { passive: false }
 );
 
-container.addEventListener(
+input.on(
     "touchend",
     (e) => {
         e.preventDefault();
@@ -3594,7 +3594,7 @@ container.addEventListener(
     { passive: false }
 );
 
-container.addEventListener("touchcancel", () => {
+input.on("touchcancel", () => {
     touchMode = null;
     touchHideHoverUI();
 });

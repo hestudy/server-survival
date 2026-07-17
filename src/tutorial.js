@@ -1,3 +1,6 @@
+import { storage } from './platform/storage.js';
+import { playSelectSfx } from './platform/audio.js';
+
 const TUTORIAL_STORAGE_KEY = 'serverSurvivalTutorialComplete';
 
 function getTutorialSteps() {
@@ -202,15 +205,15 @@ class Tutorial {
     }
 
     isCompleted() {
-        return localStorage.getItem(TUTORIAL_STORAGE_KEY) === 'true';
+        return storage.get(TUTORIAL_STORAGE_KEY) === 'true';
     }
 
     markCompleted() {
-        localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+        storage.set(TUTORIAL_STORAGE_KEY, 'true');
     }
 
     reset() {
-        localStorage.removeItem(TUTORIAL_STORAGE_KEY);
+        storage.remove(TUTORIAL_STORAGE_KEY);
     }
 
     start() {
@@ -342,7 +345,7 @@ class Tutorial {
             this.popup.classList.add('tutorial-step-change');
             setTimeout(() => this.popup.classList.remove('tutorial-step-change'), 300);
             this.showStep();
-            new Audio('assets/sounds/click-5.mp3').play();
+            playSelectSfx();
         }
     }
 

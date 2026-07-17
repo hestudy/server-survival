@@ -1,4 +1,11 @@
-class SoundService {
+// Platform adapter: audio (ADR-0002, issue #7). Web Audio and <audio>
+// element construction are allowed only in this file. SoundService (moved
+// here verbatim from src/services/) is the web implementation of the audio
+// interface: BGM switching, mute, and the synthesized gameplay tones. The
+// mini-game port replaces this file (wx.createInnerAudioContext et al.)
+// behind the same method surface.
+
+export class SoundService {
     constructor() {
         this.ctx = null;
         this.muted = true;
@@ -149,5 +156,15 @@ class SoundService {
     }
 }
 
-// Transitional global bridge (ADR-0002 expand step): instantiated by game.js.
-window.SoundService = SoundService;
+// One-shot tool-feedback clicks, historical behavior kept intact: a fresh
+// element at full volume on every call, independent of the mute state and
+// the master gain pipeline.
+function playOneShot(file) {
+    new Audio(file).play();
+}
+export function playClickSfx() {
+    playOneShot("assets/sounds/click-9.mp3");
+}
+export function playSelectSfx() {
+    playOneShot("assets/sounds/click-5.mp3");
+}
