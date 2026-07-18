@@ -161,6 +161,10 @@ class Service extends SimService {
     }
 
     serviceGroup.add(this.mesh);
+
+    // Quality tiers (issue #12): a service placed while the renderer is
+    // degraded starts with the simplified material right away.
+    window.applyMaterialQuality?.(this.mesh);
   }
 
   upgrade() {
@@ -310,6 +314,12 @@ class Service extends SimService {
     }
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();
+    // The full-quality material parked while a low tier is active
+    // (issue #12) needs disposing too.
+    if (this.mesh.userData.perfFullMat) {
+      this.mesh.userData.perfFullMat.dispose();
+      this.mesh.userData.perfFullMat = null;
+    }
   }
 
   createHealthBar() {

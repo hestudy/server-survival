@@ -4,15 +4,28 @@ import { SimRequest } from "../sim/request.js";
 // queue admission; this subclass only adds the Three.js mesh and its motion
 // along the hop. Mesh disposal is driven by the lifecycle hooks in game.js
 // (immediate on finish/block, after a 500ms death flash on fail/throttle).
+//
+// Particle cap (issue #12): the particleBudget (wired by game.js) decides at
+// spawn whether this request gets a mesh at all. Beyond the cap `this.mesh`
+// stays null — the request is still fully simulated (parity pinned by
+// src/render/particle-cap.parity.test.js) and its presence shows up in the
+// aggregated internet-node pulse instead.
 class Request extends SimRequest {
     constructor(type) {
         super(STATE.world, type);
 
-        const color = this.typeConfig.color;
+        this.mesh = null;
+        this.particleVisible = particleBudget.acquire();
+        this.particleEpoch = particleBudget.epoch;
+        if (!this.particleVisible) return;
 
-        const geo = new THREE.SphereGeometry(0.4, 8, 8);
-        const mat = new THREE.MeshBasicMaterial({ color: color });
-        this.mesh = new THREE.Mesh(geo, mat);
+        // One shared sphere geometry for every request particle; only the
+        // material (color, death flash) is per-request.
+        if (!Request._geometry) {
+            Request._geometry = new THREE.SphereGeometry(0.4, 8, 8);
+        }
+        const mat = new THREE.MeshBasicMaterial({ color: this.typeConfig.color });
+        this.mesh = new THREE.Mesh(Request._geometry, mat);
 
         this.mesh.position.copy(STATE.internetNode.position);
         this.mesh.position.y = 2;
@@ -23,7 +36,7 @@ class Request extends SimRequest {
     }
 
     flyTo(service) {
-        this.origin.copy(this.mesh.position);
+        if (this.mesh) this.origin.copy(this.mesh.position);
         super.flyTo(service);
     }
 
@@ -31,7 +44,7 @@ class Request extends SimRequest {
         const wasMoving = this.isMoving;
         super.update(dt);
 
-        if (!this.target) return;
+        if (!this.mesh || !this.target) return;
         if (wasMoving && !this.isMoving) {
             this.mesh.position.copy(this.target.position);
             this.mesh.position.y = 2;
@@ -44,9 +57,12 @@ class Request extends SimRequest {
     }
 
     destroy() {
+        particleBudget.release(this.particleVisible, this.particleEpoch);
+        this.particleEpoch = -1; // a second destroy() must not release again
+        if (!this.mesh) return;
         requestGroup.remove(this.mesh);
-        this.mesh.geometry.dispose();
-        this.mesh.material.dispose();
+        this.mesh.material.dispose(); // geometry is shared — never disposed
+        this.mesh = null;
     }
 }
 

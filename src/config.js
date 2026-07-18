@@ -493,6 +493,35 @@ const CONFIG = {
       MALICIOUS: 20,
     },
   },
+
+  // Performance baseline (issue #12): render-layer only — the simulation
+  // core never reads this block. See docs/perf/2026-07-18-m3c-performance-
+  // baseline.md for the tier ladder rationale and the real-device
+  // verification protocol.
+  perf: {
+    // devicePixelRatio is capped at 2 even at full quality: 3x-4x phone
+    // panels quadruple the fragment load for imperceptible extra detail.
+    maxPixelRatio: 2,
+    governor: {
+      degradeBelowFps: 27, // below the 30fps floor, with a little slack
+      degradeAfterSeconds: 4,
+      recoverAboveFps: 50,
+      recoverAfterSeconds: 15,
+      cooldownSeconds: 6,
+    },
+    // 降阶档位 ladder, best first. pixelRatio drops before shadows so a
+    // struggling desktop first falls back to exactly the pre-#12 rendering
+    // (pixelRatio 1, shadows on) before losing any visual feature — the
+    // desktop-freeze guarantee. particleCap only gates request meshes;
+    // excess traffic is aggregated into the internet-node pulse.
+    tiers: [
+      { name: "full", pixelRatio: 2, shadows: true, simpleMaterials: false, particleCap: 400 },
+      { name: "crisp", pixelRatio: 1.5, shadows: true, simpleMaterials: false, particleCap: 300 },
+      { name: "baseline", pixelRatio: 1, shadows: true, simpleMaterials: false, particleCap: 200 },
+      { name: "low", pixelRatio: 1, shadows: false, simpleMaterials: true, particleCap: 120 },
+      { name: "minimal", pixelRatio: 0.75, shadows: false, simpleMaterials: true, particleCap: 80 },
+    ],
+  },
 };
 
 // Transitional global bridge (ADR-0002 expand step): shared with the other
