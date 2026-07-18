@@ -7,6 +7,7 @@ const NE_TRANSLATIONS = {
     "reputation": "प्रतिष्ठा",
     "load_rps": "लोड (RPS)",
     "next_rps_surge": "अग्लो RPS छाला",
+    "in": "बाँकी",
     "traffic": "ट्राफिक",
     "failures": "असफलताहरू",
     "total": "कुल",

@@ -109,6 +109,16 @@ A fully customizable testing environment for experimenting with any architecture
 
 **No game over in Sandbox** - experiment freely!
 
+### Playing on Mobile
+
+Survival Mode is fully playable on phones and tablets (v1 of the mobile web version):
+
+- **Top Status Strip** - Budget, reputation, time, RPS and the active event live in a compact strip at the top of small screens.
+- **Bottom Sheet** - Finances, Service Health and node Details are tabs in a pull-up drawer above the toolbar, so the canvas stays maximized.
+- **Touch Gestures** - Tap to select/place, one-finger drag to pan, pinch to zoom, long-press to lift and move a service (see the Controls section below).
+- **Automatic Quality Scaling** - The game caps pixel ratio and steps down shadows/materials/particles when the frame rate drops, targeting a stable 30fps on mid-range phones.
+- **Desktop-Only Modes** - Campaign, Sandbox and the Tutorial are not yet adapted for small screens; the menu points you to a desktop browser for those.
+
 ### Recent Features (v2.3)
 
 - **Serverless Function** - Pay-per-use compute variant ($45 to place, $2/min upkeep, $0.03 per completed request). Auto-scales to capacity 30 with a 900ms cold-start processing time. Same routing topology as Compute (ALB/Queue/API Gateway upstream; Cache/DB/NoSQL/S3/Search/Replica downstream).
@@ -191,10 +201,7 @@ npm run preview   # serve the production build locally
 
 Then start building your cloud empire!
 
-## Community
-
-Join our Discord server to discuss strategies and share your high scores:
-[Join Discord](https://discord.gg/f38NgHDwnK)
+Deployment: pushes to `main` are built and published to GitHub Pages by the `deploy-pages` GitHub Actions workflow (see ADR-0002 in `docs/adr/`).
 
 ---
 

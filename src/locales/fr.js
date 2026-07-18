@@ -7,6 +7,7 @@ const FR_TRANSLATIONS = {
     "reputation": "RÉPUTATION",
     "load_rps": "CHARGE (RPS)",
     "next_rps_surge": "Prochaine pic de charge",
+    "in": "dans",
     "traffic": "TRAFIC",
     "failures": "Échecs",
     "total": "total",

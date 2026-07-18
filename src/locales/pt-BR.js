@@ -7,6 +7,7 @@ const PT_BR_TRANSLATIONS = {
     "reputation": "Reputação",
     "load_rps": "Carga (RPS)",
     "next_rps_surge": "Próxima Onda de Carga",
+    "in": "em",
     "traffic": "Tráfego",
     "failures": "Falhas",
     "total": "Total",

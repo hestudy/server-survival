@@ -18,7 +18,7 @@ import {
     normalizeSave,
     restoreWorld,
 } from "./save.js";
-import { makeWorld, runUntilDrained, wire } from "./test-helpers.js";
+import { makeWorld, runUntilDrained, stepFor, wire } from "./test-helpers.js";
 import v1Legacy from "./fixtures/save-v1-legacy.json";
 import v2PreRefactor from "./fixtures/save-v2-prerefactor.json";
 
@@ -231,6 +231,38 @@ describe("backward compatibility with pre-refactor saves", () => {
         expect(world.services).toHaveLength(4);
         expect(world.economy.score.storage).toBe(90);
         expect(world.trafficDistribution.STATIC).toBe(0.5);
+    });
+
+    it("continues playing on a restored pre-refactor save (issue #13 final check)", () => {
+        const { world, hooks, economy } = makeWorld();
+        restoreWorld(world, normalizeSave(load(v2PreRefactor)));
+
+        // Fresh traffic of every kind the old architecture handled must still
+        // route to a terminal state on the restored topology.
+        economy.upkeepEnabled = false; // keep the money assertion monotone
+        const moneyBefore = economy.money;
+        const timeBefore = world.time;
+        world.spawnRequest("STATIC");
+        world.spawnRequest("READ");
+        world.spawnRequest("UPLOAD");
+        world.spawnRequest("MALICIOUS");
+        runUntilDrained(world);
+
+        expect(world.requests).toHaveLength(0); // nothing stuck, nothing leaked
+        expect(hooks.of("finished").map((e) => e.type).sort()).toEqual([
+            "READ",
+            "STATIC",
+            "UPLOAD",
+        ]);
+        expect(hooks.of("blocked").map((e) => e.type)).toEqual(["MALICIOUS"]);
+        expect(economy.money).toBeGreaterThan(moneyBefore);
+
+        // And the clock keeps running from where the old save left off,
+        // upkeep and all.
+        economy.upkeepEnabled = true;
+        stepFor(world, 10);
+        expect(world.time).toBeGreaterThan(timeBefore + 10);
+        expect(economy.reputation).toBeGreaterThan(0);
     });
 
     it("leaves current-version saves untouched by migration", () => {

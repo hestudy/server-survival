@@ -7,6 +7,7 @@ const EN_TRANSLATIONS = {
     "reputation": "REPUTATION",
     "load_rps": "LOAD (RPS)",
     "next_rps_surge": "Next RPS Surge",
+    "in": "in",
     "traffic": "TRAFFIC",
     "failures": "Failures",
     "total": "total",

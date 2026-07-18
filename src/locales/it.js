@@ -7,6 +7,7 @@ const IT_TRANSLATIONS = {
     "reputation": "REPUTAZIONE",
     "load_rps": "CARICO (RPS)",
     "next_rps_surge": "Prossimo Picco RPS",
+    "in": "tra",
     "traffic": "TRAFFICO",
     "failures": "Errori",
     "total": "totale",

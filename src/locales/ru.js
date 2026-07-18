@@ -7,6 +7,7 @@ const RU_TRANSLATIONS = {
     "reputation": "РЕПУТАЦИЯ",
     "load_rps": "НАГРУЗКА (RPS)",
     "next_rps_surge": "Следующий всплеск RPS",
+    "in": "через",
     "traffic": "ТРАФИК",
     "failures": "Ошибки",
     "total": "всего",

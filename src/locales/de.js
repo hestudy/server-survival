@@ -7,6 +7,7 @@ const DE_TRANSLATIONS = {
     "reputation": "REPUTATION",
     "load_rps": "LAST (Anfr./s)",
     "next_rps_surge": "Nächster Last-Anstieg",
+    "in": "in",
     "traffic": "TRAFFIC",
     "failures": "Fehler",
     "total": "Gesamt",

@@ -7,6 +7,7 @@ const KO_TRANSLATIONS = {
     "reputation": "평판",
     "load_rps": "부하 (RPS)",
     "next_rps_surge": "다음 RPS 급증",
+    "in": "남음",
     "traffic": "트래픽",
     "failures": "장애",
     "total": "합계",

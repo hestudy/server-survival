@@ -7,6 +7,7 @@ const ZH_TRANSLATIONS = {
     "reputation": "声誉值",
     "load_rps": "负载 (RPS)",
     "next_rps_surge": "下次负载浪涌",
+    "in": "还剩",
     "traffic": "流量",
     "failures": "故障",
     "total": "总计",
