@@ -490,7 +490,10 @@ const RU_TRANSLATIONS = {
     "campaign_chapter_1": "Глава 1: Основы",
     "campaign_chapter_2": "Глава 2: Оптимизация",
     "campaign_chapter_3": "Глава 3: Защита и мастерство",
-    "campaign_locked": "Заблокировано"
+    "campaign_locked": "Заблокировано",
+    // M3-a (issue #10): English placeholder — proper translation lands in the
+    // nine-language wrap-up ticket. Placeholder beats rendering the raw key.
+    "mobile_modes_hint": "📱 Campaign, Sandbox and the Tutorial are not yet adapted for small screens — play them in a desktop browser."
 };
 
 // Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.

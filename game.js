@@ -316,8 +316,8 @@ function showActiveEventBar(eventType) {
     bar.classList.remove("hidden");
 
     // M3-a (issue #10): mirror into the small-screen status strip's event chip.
-    const chip = document.getElementById("m-event");
-    const chipIcon = document.getElementById("m-event-icon");
+    const chip = document.getElementById("strip-event");
+    const chipIcon = document.getElementById("strip-event-icon");
     if (chip) {
         chip.className = config.color;
         if (chipIcon) chipIcon.textContent = config.icon;
@@ -327,7 +327,7 @@ function showActiveEventBar(eventType) {
 function hideActiveEventBar() {
     const bar = document.getElementById("active-event-bar");
     if (bar) bar.classList.add("hidden");
-    const chip = document.getElementById("m-event");
+    const chip = document.getElementById("strip-event");
     if (chip) chip.className = "hidden";
 }
 
@@ -348,7 +348,7 @@ function updateActiveEventTimer() {
         timerEl.textContent = formatTime(Math.ceil(remaining));
     }
 
-    const chipTimerEl = document.getElementById("m-event-timer");
+    const chipTimerEl = document.getElementById("strip-event-timer");
     if (chipTimerEl) {
         chipTimerEl.textContent = formatTime(Math.ceil(remaining));
     }
@@ -2965,13 +2965,13 @@ function animate(time) {
     // M3-a (issue #10): mirror the headline stats into the small-screen top
     // status strip. The strip is display:none on desktop, so these writes
     // are invisible there.
-    const mMoney = document.getElementById("m-money");
+    const mMoney = document.getElementById("strip-money");
     if (mMoney) mMoney.textContent = `$${Math.floor(STATE.money)}`;
-    const mRep = document.getElementById("m-rep");
+    const mRep = document.getElementById("strip-rep");
     if (mRep) mRep.textContent = `${Math.round(Math.max(0, STATE.reputation))}%`;
-    const mTime = document.getElementById("m-time");
+    const mTime = document.getElementById("strip-time");
     if (mTime) mTime.textContent = formatTime(STATE.elapsedGameTime);
-    const mRps = document.getElementById("m-rps");
+    const mRps = document.getElementById("strip-rps");
     if (mRps) mRps.textContent = STATE.currentRPS.toFixed(1);
 
     // Update next RPS milestone (survival mode only)

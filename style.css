@@ -62,7 +62,7 @@ body {
   }
 
   /* Event chip inside the strip; game.js toggles .hidden and the bg color. */
-  #m-event:not(.hidden) {
+  #strip-event:not(.hidden) {
     display: inline-flex;
     align-items: center;
     gap: 4px;
