@@ -133,7 +133,7 @@
       </div>
     </div>
 
-    <div class="absolute top-4 right-4 flex flex-col gap-3 items-end pointer-events-none">
+    <div id="top-right-panels" class="absolute top-4 right-4 flex flex-col gap-3 items-end pointer-events-none">
       <!-- Score Details Panel (Top Right) -->
       <div id="detailsPanel" class="glass-panel rounded-xl p-4 w-60 pointer-events-auto">
         <h3 data-i18n="traffic_score_details" class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-700 pb-1">
@@ -240,6 +240,28 @@
       </div>
     </div>
 
+    <!-- M3-a (issue #10): small-screen top status strip. Hidden on desktop
+         (>=1024px, see style.css); values are mirrored from the corner
+         panels by game.js so both share one DOM. -->
+    <div id="top-status-bar"
+      class="fixed top-0 left-0 right-0 z-40 glass-panel pointer-events-auto items-center justify-between gap-2 px-3 py-1 font-mono text-xs">
+      <span class="flex items-center gap-1" data-i18n-title="budget">
+        <span>💰</span><span id="m-money" class="text-green-400 font-bold">$0</span>
+      </span>
+      <span class="flex items-center gap-1" data-i18n-title="reputation">
+        <span>⭐</span><span id="m-rep" class="text-yellow-400">100%</span>
+      </span>
+      <span class="flex items-center gap-1" data-i18n-title="elapsed_time">
+        <span>⏱</span><span id="m-time" class="text-gray-300">00:00</span>
+      </span>
+      <span class="flex items-center gap-1" data-i18n-title="load_rps">
+        <span>📶</span><span id="m-rps" class="text-blue-300">0.0</span>
+      </span>
+      <span id="m-event" class="hidden" data-i18n-title="event_active">
+        <span id="m-event-icon">⚡</span><span id="m-event-timer" class="font-bold">0:00</span>
+      </span>
+    </div>
+
     <!-- Active Event Indicator Bar -->
     <div id="active-event-bar" class="fixed top-0 left-0 right-0 h-8 z-40 hidden">
       <div class="h-full flex items-center justify-center gap-3 text-white font-bold text-sm event-active-bar">
@@ -257,7 +279,7 @@
     </div>
 
     <!-- Time Control Panel (Top Center) -->
-    <div
+    <div id="time-control-panel"
       class="absolute top-4 left-1/2 transform -translate-x-1/2 glass-panel rounded-xl p-2 pointer-events-auto flex gap-2">
       <!-- Language Switcher -->
       <div class="flex items-center bg-gray-800 rounded-lg px-1 border border-gray-600 mr-1">
@@ -792,17 +814,25 @@
           Start Survival
         </button>
 
-        <button onclick="openCampaignSelect()"
+        <button onclick="openCampaignSelect()" id="menu-campaign-btn"
           class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transform transition hover:scale-105 font-mono uppercase text-lg border border-yellow-400/50 flex justify-between items-center">
           <span data-i18n="campaign_mode">Campaign</span>
           <span id="campaign-progress-label" class="text-xs opacity-75 font-normal">0/14 ★0</span>
         </button>
 
-        <button onclick="startSandbox()"
+        <button onclick="startSandbox()" id="menu-sandbox-btn"
           data-i18n="sandbox_mode"
           class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transform transition hover:scale-105 font-mono uppercase text-lg border border-purple-400/50">
           Sandbox Mode
         </button>
+
+        <!-- M3-a (issue #10): shown only under the small-screen breakpoint,
+             where Campaign/Sandbox/Tutorial entries are hidden. -->
+        <div id="mobile-modes-hint" data-i18n="mobile_modes_hint"
+          class="text-xs text-gray-400 bg-gray-800/60 border border-gray-700 rounded-lg px-4 py-3 text-left leading-relaxed">
+          📱 Campaign, Sandbox and the Tutorial are not yet adapted for small
+          screens — play them in a desktop browser.
+        </div>
 
         <button onclick="document.getElementById('upload-file-input')?.click()" id="upload-btn"
           data-i18n="upload_game"

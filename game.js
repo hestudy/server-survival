@@ -13,6 +13,13 @@ import { createGestureRecognizer } from "./src/input/gestures.js";
 
 STATE.sound = new SoundService();
 
+// M3-a responsive HUD (issue #10): must match the small-screen breakpoint in
+// style.css. Below it the tutorial (desktop-only for now) is skipped.
+const smallScreenQuery = window.matchMedia("(max-width: 1023px)");
+function isSmallScreen() {
+    return smallScreenQuery.matches;
+}
+
 // ==================== SIMULATION CORE WIRING (ADR-0002 expand step) ====
 // The sim world (src/sim/world.js) owns traffic spawning, entry selection,
 // per-hop routing, the request lifecycle terminals and — since M1-c — every
@@ -307,11 +314,21 @@ function showActiveEventBar(eventType) {
     icon.textContent = config.icon;
     text.textContent = config.text;
     bar.classList.remove("hidden");
+
+    // M3-a (issue #10): mirror into the small-screen status strip's event chip.
+    const chip = document.getElementById("m-event");
+    const chipIcon = document.getElementById("m-event-icon");
+    if (chip) {
+        chip.className = config.color;
+        if (chipIcon) chipIcon.textContent = config.icon;
+    }
 }
 
 function hideActiveEventBar() {
     const bar = document.getElementById("active-event-bar");
     if (bar) bar.classList.add("hidden");
+    const chip = document.getElementById("m-event");
+    if (chip) chip.className = "hidden";
 }
 
 function updateActiveEventTimer() {
@@ -329,6 +346,11 @@ function updateActiveEventTimer() {
 
     if (timerEl) {
         timerEl.textContent = formatTime(Math.ceil(remaining));
+    }
+
+    const chipTimerEl = document.getElementById("m-event-timer");
+    if (chipTimerEl) {
+        chipTimerEl.textContent = formatTime(Math.ceil(remaining));
     }
 
     if (progressEl && STATE.intervention.eventDuration) {
@@ -1314,7 +1336,9 @@ window.startGame = () => {
     document.getElementById("main-menu-modal").classList.add("hidden");
     resetGame();
 
-    if (window.tutorial) {
+    // M3-a (issue #10): the tutorial is not adapted for small screens; the
+    // main menu shows the desktop guidance hint instead.
+    if (window.tutorial && !isSmallScreen()) {
         setTimeout(() => {
             window.tutorial.start();
         }, 500);
@@ -2937,6 +2961,18 @@ function animate(time) {
     if (elapsedEl) {
         elapsedEl.textContent = formatTime(STATE.elapsedGameTime);
     }
+
+    // M3-a (issue #10): mirror the headline stats into the small-screen top
+    // status strip. The strip is display:none on desktop, so these writes
+    // are invisible there.
+    const mMoney = document.getElementById("m-money");
+    if (mMoney) mMoney.textContent = `$${Math.floor(STATE.money)}`;
+    const mRep = document.getElementById("m-rep");
+    if (mRep) mRep.textContent = `${Math.round(Math.max(0, STATE.reputation))}%`;
+    const mTime = document.getElementById("m-time");
+    if (mTime) mTime.textContent = formatTime(STATE.elapsedGameTime);
+    const mRps = document.getElementById("m-rps");
+    if (mRps) mRps.textContent = STATE.currentRPS.toFixed(1);
 
     // Update next RPS milestone (survival mode only)
     const rpsNextEl = document.getElementById("rps-next");
