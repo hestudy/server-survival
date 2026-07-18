@@ -495,7 +495,10 @@ const EN_TRANSLATIONS = {
     "campaign_chapter_1": "Chapter 1: Basics",
     "campaign_chapter_2": "Chapter 2: Optimization",
     "campaign_chapter_3": "Chapter 3: Defense & Mastery",
-    "campaign_locked": "Locked"
+    "campaign_locked": "Locked",
+    // M3-a responsive HUD (issue #10). zh has the translation; the other
+    // seven locales get theirs in the wrap-up ticket.
+    "mobile_modes_hint": "📱 Campaign, Sandbox and the Tutorial are not yet adapted for small screens — play them in a desktop browser."
 };
 
 // Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.

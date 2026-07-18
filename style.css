@@ -30,6 +30,89 @@ body {
   }
 }
 
+/* M3-a responsive HUD (issue #10): below the ~1024px breakpoint the
+   persistent UI collapses to the top status strip + bottom toolbar. The
+   corner panels, sandbox/campaign entries and the tutorial are desktop-only
+   for now. Desktop (>=1024px) is deliberately left untouched ("desktop
+   freeze"). Both layouts share one DOM: the strip exists on desktop too but
+   stays display:none, and game.js mirrors values into it unconditionally. */
+#top-status-bar {
+  display: none;
+}
+
+#mobile-modes-hint {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  /* Corner panels off — the canvas must not be covered by persistent UI. */
+  #statsPanel,
+  #top-right-panels,
+  #objectivesPanel,
+  #sandboxPanel {
+    display: none;
+  }
+
+  #top-status-bar {
+    display: flex;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+  }
+
+  /* Event chip inside the strip; game.js toggles .hidden and the bg color. */
+  #strip-event:not(.hidden) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    border-radius: 4px;
+    color: #fff;
+  }
+
+  /* The full-width event banner duplicates the strip's event chip and would
+     sit on top of the strip — small screens use the chip instead. */
+  #active-event-bar {
+    display: none;
+  }
+
+  /* Time controls tuck in right below the strip, still touch-sized. */
+  #time-control-panel {
+    top: 32px;
+    max-width: calc(100vw - 8px);
+  }
+
+  /* Transient warnings (DDoS waves, random events) drop below the time
+     controls, compacted so they stay readable without covering the board.
+     They are pointer-events-none, so they never block input. */
+  #intervention-warnings {
+    top: 96px;
+    max-width: calc(100vw - 24px);
+  }
+  #intervention-warnings .intervention-warning {
+    padding: 6px 12px;
+  }
+  #intervention-warnings .intervention-warning .text-lg {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  #intervention-warnings .intervention-warning .text-2xl {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+  }
+
+  /* Non-survival mode entries are unreachable on small screens; the menu
+     shows the desktop guidance hint instead. */
+  #menu-campaign-btn,
+  #menu-sandbox-btn {
+    display: none;
+  }
+  #mobile-modes-hint {
+    display: block;
+  }
+}
+
 /* Glassmorphism UI */
 .glass-panel {
   background: rgba(15, 23, 42, 0.85);

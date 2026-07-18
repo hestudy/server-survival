@@ -489,7 +489,10 @@ const IT_TRANSLATIONS = {
     "campaign_chapter_1": "Capitolo 1: Le Basi",
     "campaign_chapter_2": "Capitolo 2: Ottimizzazione",
     "campaign_chapter_3": "Capitolo 3: Difesa e Maestria",
-    "campaign_locked": "Bloccato"
+    "campaign_locked": "Bloccato",
+    // M3-a (issue #10): English placeholder — proper translation lands in the
+    // nine-language wrap-up ticket. Placeholder beats rendering the raw key.
+    "mobile_modes_hint": "📱 Campaign, Sandbox and the Tutorial are not yet adapted for small screens — play them in a desktop browser."
 };
 
 // Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.
