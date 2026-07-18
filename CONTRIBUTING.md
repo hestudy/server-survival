@@ -34,6 +34,9 @@ This project uses vanilla JavaScript, HTML, and CSS with Three.js, built with Vi
     *   `three-global.js`: Bridges the npm Three.js package to the transitional `THREE` global.
     *   `entities/`: Game entities like `Service` and `Request`.
     *   `sim/`: Simulation core — pure game logic, no DOM/platform APIs.
+    *   `input/`: Gesture recognition layer — a pure state machine turning the
+        normalized raw pointer-event stream into semantic intents
+        (tap/lift/pan/pinch); mouse and touch share it.
     *   `platform/`: Platform adapter layer — storage, audio and the raw
         input event source live only here (see ADR-0002); includes the
         layering test that enforces the boundary.

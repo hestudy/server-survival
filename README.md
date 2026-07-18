@@ -140,6 +140,9 @@ A fully customizable testing environment for experimenting with any architecture
 - **Left Click:** Select tools, place services, and connect nodes.
 - **Right Click + Drag:** Pan the camera.
 - **Scroll:** Zoom in and out.
+- **Touch — Tap:** Select a service and see its live details (the hover tooltip info); with a build tool active, tap an empty tile to place.
+- **Touch — One-Finger Drag:** Pan the camera (never moves services).
+- **Touch — Two-Finger Pinch:** Zoom (moving the midpoint also pans).
 - **WASD / Arrows:** Move camera (pan) when zoomed in.
 - **ESC:** Open main menu and pause game. Press again or click Resume to close menu (stays paused).
 - **Camera Reset:** Press `R` to reset the camera position.
