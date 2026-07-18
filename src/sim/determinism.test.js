@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createSeededRng } from "./rng.js";
-import { STEP, makeWorld, wire } from "./test-helpers.js";
+import { makeWorld, runSurvivalScenario } from "./test-helpers.js";
 
 const simDir = dirname(fileURLToPath(import.meta.url));
 
@@ -48,40 +48,12 @@ describe("static check: the sim core draws no ambient randomness or time", () =>
     }
 });
 
-// A full survival-style run: mixed traffic through a realistic topology,
-// long enough (110 sim-seconds) to cross a traffic shift (40s), a malicious
-// spike (blocked by the shift at 45s, lands at 90s), random-event checks
-// (every 30s) and the first RPS milestone (60s). Returns a complete
-// observable trace.
+// A full survival-style run (see runSurvivalScenario in test-helpers).
+// Returns a complete observable trace.
 function runSeededGame(seed) {
     const { world, hooks } = makeWorld({ rng: createSeededRng(seed) });
 
-    const waf = world.addService("waf");
-    const alb = world.addService("alb");
-    const compute = world.addService("compute");
-    const cache = world.addService("cache");
-    const db = world.addService("db");
-    const s3 = world.addService("s3");
-    wire(world, "internet", waf);
-    wire(world, waf, alb);
-    wire(world, alb, compute);
-    wire(world, compute, cache);
-    wire(world, compute, db);
-    wire(world, compute, s3);
-    wire(world, cache, db);
-    wire(world, cache, s3);
-
-    const steps = Math.round(110 / STEP);
-    for (let i = 0; i < steps; i++) {
-        // Spawn from the live distribution (so shifts and spikes change the
-        // mix) at the event-scaled rate, like the web loop does.
-        if (i % 4 === 0) {
-            const burst = world.events.trafficBurstMultiplier > 1 ? 2 : 1;
-            for (let n = 0; n < burst; n++) world.spawnRequest();
-        }
-        world.step(STEP);
-        world.events.targetRPS(); // milestone tracking is part of the run
-    }
+    runSurvivalScenario(world);
 
     return {
         time: world.time,

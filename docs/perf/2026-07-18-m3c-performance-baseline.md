@@ -4,9 +4,14 @@
 
 ## 三项手段
 
-### 1. devicePixelRatio 封顶 2
+### 1. devicePixelRatio 封顶 2(仅小屏)
 
-`game.js` 创建 renderer 时 `setPixelRatio(min(devicePixelRatio, 2))`。3x/4x 屏手机的片元开销降为最高 4 倍→最高 4 倍中的 2x 上限(肉眼无差别)。resize 时重新应用(跨显示器/浏览器缩放会改变 dpr)。
+`game.js` 的 `tierPixelRatio()` 是像素比的唯一计算点(renderer 初始化、变档、resize 都走它):
+
+- **小屏(移动目标)**:`min(devicePixelRatio, 当前档位上限)`,档位 0 上限为 2 —— 3x/4x 屏手机不再为肉眼无差别的细节付 9–16 倍片元开销。
+- **桌面冻结断点(≥1024px)**:天花板恒为 1,即 #12 之前的渲染分辨率。桌面画面与帧率与改造前逐帧一致(档位 0–2 在桌面上完全等价);若不这样,HiDPI 桌面机会被抬到 4 倍片元开销,又因 27–50fps 滞回带永远回不去——桌面冻结验收条款不允许。
+
+resize 时重新应用(跨显示器 / 浏览器缩放 / 跨断点都会改变结果)。
 
 ### 2. 请求粒子上限(只动表现,不动仿真)
 
@@ -34,9 +39,9 @@
 | 3 low | 1 | 关 | 简化 (Lambert) | 120 |
 | 4 minimal | 0.75 | 关 | 简化 | 80 |
 
-阶梯排序是**桌面冻结**的保障:改造前的桌面渲染 = pixelRatio 1 + 阴影开(即档位 2)。一台吃力的桌面机先退回到与 #12 之前完全相同的画面,才会碰任何视觉特性(关阴影/简化材质)。旗舰桌面机保持档位 0,画质只升不降。
+pixelRatio 一列是「档位上限」,实际值 = `min(设备天花板, 档位上限)`(见手段 1:桌面天花板为 1,因此桌面上档位 0–2 渲染完全相同,只有持续低于 27fps ——即改造前同样卡的机器——才会走到关阴影/简化材质,且 governor 给了它回升的路)。pixelRatio 先降、视觉特性后动:降阶总是先到达最便宜的分辨率,才碰画面特性。
 
-当前档位记录在 `STATE.perf`({tier, tierName, fps, simpleMaterials}),每次变档 `console.info` 一条 `[perf]` 日志;变档在两帧之间应用,对玩家无打断。材质简化会把服务/互联网节点的 MeshStandardMaterial 换成便宜的 MeshLambertMaterial,回升时携带运行期状态(健康度着色、选中高亮)换回原材质。
+当前档位记录在 `STATE.perf`({tier, tierName, fps, simpleMaterials}),每次变档 `console.info` 一条 `[perf]` 日志;变档在两帧之间应用,对玩家无打断(已知取舍:开关阴影需要整场景材质重编译,变档那一帧可能有一次顿挫,受 6 秒冷却限制不会频繁发生)。材质简化会把服务/互联网节点的 MeshStandardMaterial 换成便宜的 MeshLambertMaterial,回升时携带运行期状态(健康度着色、选中高亮)换回原材质。
 
 ## 真机验证协议(验收条款 1,待真机执行)
 

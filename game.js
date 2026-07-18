@@ -33,6 +33,17 @@ function isSmallScreen() {
 
 STATE.world.requestFactory = (world, type) => new Request(type);
 
+// 500ms death flash, then dispose. Requests beyond the particle cap
+// (issue #12) have no mesh — nothing to flash, they leave immediately.
+function flashThenDestroy(req, colorHex) {
+    if (req.mesh) {
+        req.mesh.material.color.setHex(colorHex);
+        setTimeout(() => req.destroy(), 500);
+    } else {
+        req.destroy();
+    }
+}
+
 STATE.world.hooks = {
     onFinished(req, viaServiceType) {
         STATE.requestsProcessed++;
@@ -50,24 +61,12 @@ STATE.world.hooks = {
         }
         updateScoreUI();
         STATE.sound.playFail();
-        // Requests beyond the particle cap (issue #12) have no mesh — no
-        // death flash to play, so they leave the scene immediately.
-        if (req.mesh) {
-            req.mesh.material.color.setHex(CONFIG.colors.requestFail);
-            setTimeout(() => req.destroy(), 500);
-        } else {
-            req.destroy();
-        }
+        flashThenDestroy(req, CONFIG.colors.requestFail);
     },
     onThrottled(req) {
         updateScoreUI();
         STATE.sound.playFail();
-        if (req.mesh) {
-            req.mesh.material.color.setHex(CONFIG.colors.apigw); // Pink flash for throttled
-            setTimeout(() => req.destroy(), 500);
-        } else {
-            req.destroy();
-        }
+        flashThenDestroy(req, CONFIG.colors.apigw); // Pink flash for throttled
     },
     onBlocked(req) {
         updateScoreUI();
@@ -783,12 +782,10 @@ let isIsometric = true;
 resetCamera();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-// Performance baseline (issue #12): render at device resolution, capped at
-// 2 — 3x/4x phone panels quadruple fragment work for invisible gains. The
-// quality governor below may lower this further under sustained low fps.
-renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio || 1, CONFIG.perf.maxPixelRatio)
-);
+// Performance baseline (issue #12): small screens render at device
+// resolution capped at 2; the desktop-freeze breakpoint stays at the
+// pre-#12 pixelRatio 1 (see tierPixelRatio, hoisted from the perf block).
+renderer.setPixelRatio(tierPixelRatio(0));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 container.appendChild(renderer.domElement);
@@ -871,14 +868,22 @@ const qualityGovernor = createQualityGovernor({
     onChange: applyQualityTier,
 });
 
+// The one place pixel ratio is computed (renderer init, tier changes and
+// resizes all call it). 桌面冻结: at the wide breakpoint the ceiling is the
+// pre-#12 rendering (pixelRatio 1) — the dpr≤2 upgrade is a small-screen
+// (mobile) feature only, so a HiDPI desktop can never regress below its
+// pre-#12 frame rate on the shadows-on tiers.
+function tierPixelRatio(tierIndex) {
+    const ceiling = isSmallScreen() ? window.devicePixelRatio || 1 : 1;
+    return Math.min(ceiling, CONFIG.perf.tiers[tierIndex].pixelRatio);
+}
+
 function applyQualityTier(tierIndex) {
     const tier = CONFIG.perf.tiers[tierIndex];
     STATE.perf.tier = tierIndex;
     STATE.perf.tierName = tier.name;
 
-    renderer.setPixelRatio(
-        Math.min(window.devicePixelRatio || 1, tier.pixelRatio)
-    );
+    renderer.setPixelRatio(tierPixelRatio(tierIndex));
     // setPixelRatio only takes effect on the next setSize.
     renderer.setSize(window.innerWidth, window.innerHeight);
 
@@ -3250,10 +3255,10 @@ function animate(time) {
             ring.material.opacity = 1.0;
             ring.scale.setScalar(1);
         } else if (aggregated > 0) {
-            const k = Math.min(1, aggregated / 100);
+            const intensity = Math.min(1, aggregated / 100);
             const pulse = 0.5 + 0.5 * Math.sin(time / 150);
-            ring.material.opacity = 0.2 + 0.4 * k * pulse;
-            ring.scale.setScalar(1 + 0.2 * k * pulse);
+            ring.material.opacity = 0.2 + 0.4 * intensity * pulse;
+            ring.scale.setScalar(1 + 0.2 * intensity * pulse);
         } else {
             ring.material.opacity = 0.2;
             ring.scale.setScalar(1);
@@ -3374,14 +3379,9 @@ input.on("resize", () => {
     camera.top = d;
     camera.bottom = -d;
     camera.updateProjectionMatrix();
-    // devicePixelRatio can change with a monitor move or browser zoom —
-    // re-apply the active tier's cap (issue #12).
-    renderer.setPixelRatio(
-        Math.min(
-            window.devicePixelRatio || 1,
-            CONFIG.perf.tiers[STATE.perf.tier].pixelRatio
-        )
-    );
+    // devicePixelRatio and the breakpoint can change with a monitor move,
+    // browser zoom or window resize — re-apply the active tier (issue #12).
+    renderer.setPixelRatio(tierPixelRatio(STATE.perf.tier));
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 

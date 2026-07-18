@@ -11,7 +11,7 @@
 // with the same answer (and the epoch it acquired under) when the request's
 // visual dies. Epochs make delayed releases from a previous game (the 500ms
 // death-flash timeout crossing a restart) harmless.
-export function createParticleBudget(cap = Infinity) {
+export function createParticleBudget(cap) {
     let visible = 0;
     let hidden = 0;
     let epoch = 0;

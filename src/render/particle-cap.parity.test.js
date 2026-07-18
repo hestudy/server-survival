@@ -6,12 +6,9 @@
 import { describe, expect, it } from "vitest";
 import { SimRequest } from "../sim/request.js";
 import { createSeededRng } from "../sim/rng.js";
-import { STEP, makeWorld, wire } from "../sim/test-helpers.js";
+import { makeWorld, runSurvivalScenario } from "../sim/test-helpers.js";
 import { createParticleBudget } from "./perf.js";
 
-// Mirrors the survival run in determinism.test.js: mixed traffic through a
-// realistic topology, long enough to cross a traffic shift, a malicious
-// spike and random-event checks.
 function runSeededGame(seed, { particleCap = null } = {}) {
     const { world, hooks } = makeWorld({ rng: createSeededRng(seed) });
 
@@ -44,30 +41,7 @@ function runSeededGame(seed, { particleCap = null } = {}) {
         }
     }
 
-    const waf = world.addService("waf");
-    const alb = world.addService("alb");
-    const compute = world.addService("compute");
-    const cache = world.addService("cache");
-    const db = world.addService("db");
-    const s3 = world.addService("s3");
-    wire(world, "internet", waf);
-    wire(world, waf, alb);
-    wire(world, alb, compute);
-    wire(world, compute, cache);
-    wire(world, compute, db);
-    wire(world, compute, s3);
-    wire(world, cache, db);
-    wire(world, cache, s3);
-
-    const steps = Math.round(110 / STEP);
-    for (let i = 0; i < steps; i++) {
-        if (i % 4 === 0) {
-            const burst = world.events.trafficBurstMultiplier > 1 ? 2 : 1;
-            for (let n = 0; n < burst; n++) world.spawnRequest();
-        }
-        world.step(STEP);
-        world.events.targetRPS();
-    }
+    runSurvivalScenario(world);
 
     return {
         hiddenPeak,
