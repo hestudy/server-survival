@@ -3578,15 +3578,20 @@ function clearCurrentGame() {
 // lift never moves a service.
 
 // ---- 抬起 (lift) state ----
-// How far the lifted mesh rises. This is the visual feedback channel that
-// works everywhere (the haptic buzz is a no-op on iOS Safari), so it has to
-// be unmistakable next to the un-lifted neighbours.
+// Lift feedback = rise + slight grow. These are the visual channels that
+// work everywhere: the haptic buzz is a no-op on iOS Safari, and an
+// emissive highlight would be repainted every frame by the health visuals
+// (Service.updateHealthVisual), while position.y and scale are untouched by
+// them. The internet node's ground ring deliberately stays down — during a
+// lift-drag it tracks x/z on the floor, marking the landing tile.
 const LIFT_RAISE_Y = 1.2;
+const LIFT_SCALE = 1.15;
 let liftedNode = null;
 // A long-press over empty ground lifts nothing; the rest of that gesture
 // pans the camera instead so the finger never dead-ends.
 let liftPanFallback = false;
 let liftedMeshBaseY = 0;
+const liftedMeshBaseScale = new THREE.Vector3(1, 1, 1);
 const liftOffset = new THREE.Vector3();
 const liftStartPos = new THREE.Vector3();
 
@@ -3622,6 +3627,10 @@ function handleLiftIntent({ x, y }) {
         node = STATE.internetNode;
     }
     if (!node) {
+        // The fallback drag is a camera pan, so clear the hover UI exactly
+        // like handlePanStartIntent would — a tooltip pinned from an earlier
+        // tap must not drift against the panning camera.
+        touchHideHoverUI();
         liftPanFallback = true;
         return;
     }
@@ -3633,7 +3642,9 @@ function handleLiftIntent({ x, y }) {
     liftOffset.y = 0;
     if (node.mesh) {
         liftedMeshBaseY = node.mesh.position.y;
+        liftedMeshBaseScale.copy(node.mesh.scale);
         node.mesh.position.y = liftedMeshBaseY + LIFT_RAISE_Y;
+        node.mesh.scale.multiplyScalar(LIFT_SCALE);
     }
     touchHideHoverUI();
     haptics.vibrate(30);
@@ -3652,11 +3663,14 @@ function handleLiftDragIntent({ x, y, dx, dy }) {
     moveNodeTo(liftedNode, newPos);
 }
 
-// Restore the recorded absolute height rather than subtracting the raise:
-// a mid-lift reset may already have repositioned the mesh, and a relative
-// lower would then sink it below ground.
+// Restore the recorded absolute height/scale rather than undoing the raise
+// relatively: a mid-lift reset may already have repositioned the mesh, and
+// a relative lower would then sink or shrink it past its resting state.
 function lowerLiftedMesh() {
-    if (liftedNode.mesh) liftedNode.mesh.position.y = liftedMeshBaseY;
+    if (liftedNode.mesh) {
+        liftedNode.mesh.position.y = liftedMeshBaseY;
+        liftedNode.mesh.scale.copy(liftedMeshBaseScale);
+    }
 }
 
 function handleLiftDropIntent() {
@@ -3674,7 +3688,7 @@ function handleLiftCancelIntent() {
     if (!liftedNode) return;
     if (liftedNodeAlive()) {
         lowerLiftedMesh();
-        moveNodeTo(liftedNode, liftStartPos.clone());
+        moveNodeTo(liftedNode, liftStartPos);
     }
     liftedNode = null;
 }
