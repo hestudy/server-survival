@@ -1,11 +1,11 @@
 import { storage } from './platform/storage.js';
+import { pickLocale } from './pick-locale.js';
 
 /**
  * Simple i18n manager for the game
  */
 class I18nManager {
     constructor() {
-        this.currentLocale = storage.get('game_locale') || 'en';
         this.translations = {
             en: typeof EN_TRANSLATIONS !== 'undefined' ? EN_TRANSLATIONS : {},
             zh: typeof ZH_TRANSLATIONS !== 'undefined' ? ZH_TRANSLATIONS : {},
@@ -17,6 +17,11 @@ class I18nManager {
             it: typeof IT_TRANSLATIONS !== 'undefined' ? IT_TRANSLATIONS : {},
             ne: typeof NE_TRANSLATIONS !== 'undefined' ? NE_TRANSLATIONS : {}
         };
+        // First launch follows the system language when it is one of the
+        // supported locales (spec story 19); an explicit picker choice
+        // stored under game_locale always wins over detection.
+        this.currentLocale = storage.get('game_locale') ||
+            pickLocale(navigator.languages || [navigator.language], Object.keys(this.translations));
     }
 
     setLocale(locale) {
