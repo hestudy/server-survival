@@ -313,6 +313,72 @@ describe("mouse normalization (桌面冻结)", () => {
     });
 });
 
+// Issue #9 acceptance: aggressive play (rapid taps, tapping mid-pan) must
+// never be misread as a lift — a service moves only after a deliberate,
+// still long-press.
+describe("aggressive interactions never lift (issue #9)", () => {
+    it("rapid consecutive taps all tap and never arm a lift", () => {
+        const { rec, of, names } = recorder({ longPressMs: 350 });
+        let t = 0;
+        for (let i = 0; i < 5; i++) {
+            rec.handle(touch("touch-start", [pt(100 + i, 100)], t));
+            vi.advanceTimersByTime(80);
+            t += 80;
+            rec.handle(touch("touch-end", [], t));
+            vi.advanceTimersByTime(60);
+            t += 60;
+        }
+        vi.advanceTimersByTime(1000);
+        expect(of("onTap").length).toBe(5);
+        expect(names()).not.toContain("onLift");
+    });
+
+    it("the lift timer dies with the touch that armed it", () => {
+        const { rec, names } = recorder({ longPressMs: 350 });
+        rec.handle(touch("touch-start", [pt(100, 100)], 0));
+        vi.advanceTimersByTime(100);
+        rec.handle(touch("touch-end", [], 100)); // tap released early
+        rec.handle(touch("touch-start", [pt(150, 150)], 200));
+        rec.handle(touch("touch-move", [pt(190, 150)], 250)); // crosses slop
+        vi.advanceTimersByTime(1000); // the first touch's timer would fire here
+        expect(names()).not.toContain("onLift");
+        expect(names()).not.toContain("onLiftDrag");
+        expect(names()).toContain("onPanStart");
+    });
+
+    it("a tap right after finishing a pan is a tap, not a lift-drag", () => {
+        const { rec, of, names } = recorder({ tapSlopPx: 12, longPressMs: 350 });
+        rec.handle(touch("touch-start", [pt(100, 100)], 0));
+        rec.handle(touch("touch-move", [pt(160, 100)], 50));
+        rec.handle(touch("touch-move", [pt(200, 120)], 100));
+        rec.handle(touch("touch-end", [], 150));
+        rec.handle(touch("touch-start", [pt(210, 130)], 180));
+        vi.advanceTimersByTime(100);
+        rec.handle(touch("touch-end", [], 280));
+        expect(of("onTap")).toEqual([{ x: 210, y: 130 }]);
+        expect(names()).not.toContain("onLift");
+        expect(names()).not.toContain("onLiftDrag");
+    });
+
+    it("a stray second-finger tap mid-pan never taps, lifts, or drags a node", () => {
+        const { rec, names } = recorder({
+            tapSlopPx: 12,
+            longPressMs: 350,
+            tapMaxMs: 500,
+        });
+        rec.handle(touch("touch-start", [pt(100, 100)], 0));
+        rec.handle(touch("touch-move", [pt(140, 100)], 50)); // panning
+        rec.handle(touch("touch-start", [pt(140, 100), pt(300, 300)], 100)); // stray tap lands
+        rec.handle(touch("touch-end", [pt(140, 100)], 160)); // and leaves quickly
+        rec.handle(touch("touch-move", [pt(150, 110)], 200));
+        vi.advanceTimersByTime(1000);
+        rec.handle(touch("touch-end", [], 1200));
+        expect(names()).not.toContain("onTap");
+        expect(names()).not.toContain("onLift");
+        expect(names()).not.toContain("onLiftDrag");
+    });
+});
+
 describe("cancellation and stray events", () => {
     it("touch-cancel resets the machine and emits onCancel; next tap still works", () => {
         const { rec, of, names } = recorder();

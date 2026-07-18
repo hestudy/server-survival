@@ -8,6 +8,7 @@ import {
 import { storage } from "./src/platform/storage.js";
 import { SoundService, playClickSfx, playSelectSfx } from "./src/platform/audio.js";
 import { createWebInputSource } from "./src/platform/input.js";
+import { haptics } from "./src/platform/haptics.js";
 import { createGestureRecognizer } from "./src/input/gestures.js";
 
 STATE.sound = new SoundService();
@@ -2041,28 +2042,29 @@ input.on("contextmenu", (e) => e.preventDefault());
 // intents by the gesture recognizer (src/input/gestures.js). Mouse intents
 // reproduce the pre-recognizer desktop behavior verbatim (桌面冻结); touch
 // intents implement the M2 gesture system: tap = 点选 (select + live detail
-// tooltip), single-finger drag = camera pan, two-finger pinch = zoom.
-// Long-press 抬起 (lift) is recognized and tested inside the gesture layer
-// but stays disabled here until the move-service issue lands — a
-// single-finger drag must never move a service.
-const gestures = createGestureRecognizer(
-    {
-        onPress: handlePressIntent,
-        onDrag: handleDragIntent,
-        onRelease: handleReleaseIntent,
-        onHover: handleHoverIntent,
-        onHoverEnd: handleHoverEndIntent,
-        onPanStart: handlePanStartIntent,
-        onPan: handlePanIntent,
-        onPanEnd: handlePanEndIntent,
-        onTap: handleTapIntent,
-        onPinchStart: handlePinchStartIntent,
-        onPinch: handlePinchIntent,
-        onZoom: handleZoomIntent,
-        onCancel: handleTouchCancelIntent,
-    },
-    { longPressEnabled: false }
-);
+// tooltip), single-finger drag = camera pan, two-finger pinch = zoom, and —
+// since issue #9 — long-press ≈350ms = 抬起 (lift): the held service rises
+// with a haptic buzz, follows the finger, and settles on release. A
+// single-finger drag without a lift still never moves a service.
+const gestures = createGestureRecognizer({
+    onPress: handlePressIntent,
+    onDrag: handleDragIntent,
+    onRelease: handleReleaseIntent,
+    onHover: handleHoverIntent,
+    onHoverEnd: handleHoverEndIntent,
+    onPanStart: handlePanStartIntent,
+    onPan: handlePanIntent,
+    onPanEnd: handlePanEndIntent,
+    onTap: handleTapIntent,
+    onLift: handleLiftIntent,
+    onLiftDrag: handleLiftDragIntent,
+    onLiftDrop: handleLiftDropIntent,
+    onLiftCancel: handleLiftCancelIntent,
+    onPinchStart: handlePinchStartIntent,
+    onPinch: handlePinchIntent,
+    onZoom: handleZoomIntent,
+    onCancel: handleTouchCancelIntent,
+});
 
 input.on("mousedown", (e) => {
     gestures.handle({
@@ -2274,6 +2276,9 @@ function handlePinchIntent({ scale, dx, dy }) {
 }
 
 function handleTouchCancelIntent() {
+    // A system interruption (incoming call, browser gesture) reaches us as a
+    // bare onCancel even mid-lift — put the node back where it started.
+    handleLiftCancelIntent();
     touchHideHoverUI();
 }
 
@@ -2287,21 +2292,7 @@ function handleDragIntent({ x, y, dx, dy }) {
         if (hit.pos) {
             const newPos = hit.pos.clone().add(dragOffset);
             newPos.y = 0;
-
-            draggedNode.position.copy(newPos);
-
-            if (draggedNode === STATE.internetNode) {
-                STATE.internetNode.mesh.position.x = newPos.x;
-                STATE.internetNode.mesh.position.z = newPos.z;
-                STATE.internetNode.ring.position.x = newPos.x;
-                STATE.internetNode.ring.position.z = newPos.z;
-            } else if (draggedNode.mesh) {
-                draggedNode.mesh.position.x = newPos.x;
-                draggedNode.mesh.position.z = newPos.z;
-            }
-
-            updateConnectionsForNode(draggedNode.id);
-
+            moveNodeTo(draggedNode, newPos);
             container.style.cursor = "grabbing";
         }
         return;
@@ -2605,36 +2596,44 @@ input.on("mouseup", (e) => {
     });
 });
 
+// Move a node (service or the internet node) to a new logical position and
+// keep its meshes and attached connections in sync. Shared by the desktop
+// left-drag and the touch lift-drag; only x/z travel — the mesh keeps its
+// own height (which is how the lift raise survives the drag).
+function moveNodeTo(node, pos) {
+    node.position.copy(pos);
+    if (node === STATE.internetNode) {
+        STATE.internetNode.mesh.position.x = pos.x;
+        STATE.internetNode.mesh.position.z = pos.z;
+        STATE.internetNode.ring.position.x = pos.x;
+        STATE.internetNode.ring.position.z = pos.z;
+    } else if (node.mesh) {
+        node.mesh.position.x = pos.x;
+        node.mesh.position.z = pos.z;
+    }
+    updateConnectionsForNode(node.id);
+}
+
+// Settle a dropped node onto the grid. Rejecting a drop onto a tile already
+// occupied by another service matters because the two would overlap and
+// whichever mesh the raycaster hits first makes the other permanently
+// unselectable (can't delete/upgrade it) — such drops bounce back to where
+// the drag started.
+function settleNode(node, dragStart) {
+    let snapped = snapToGrid(node.position);
+    const occupied = STATE.services.some(
+        (s) => s !== node && s.position.distanceTo(snapped) < 1
+    );
+    if (occupied) {
+        snapped = snapToGrid(dragStart);
+    }
+    moveNodeTo(node, snapped);
+}
+
 function handleReleaseIntent() {
     if (isDraggingNode && draggedNode) {
         isDraggingNode = false;
-
-        let snapped = snapToGrid(draggedNode.position);
-
-        // Reject a drop onto a tile already occupied by another service —
-        // otherwise the two overlap and whichever mesh the raycaster hits first
-        // makes the other permanently unselectable (can't delete/upgrade it).
-        const occupied = STATE.services.some(
-            (s) => s !== draggedNode && s.position.distanceTo(snapped) < 1
-        );
-        if (occupied) {
-            snapped = snapToGrid(dragStartPos);
-        }
-
-        draggedNode.position.copy(snapped);
-
-        if (draggedNode === STATE.internetNode) {
-            STATE.internetNode.mesh.position.x = snapped.x;
-            STATE.internetNode.mesh.position.z = snapped.z;
-            STATE.internetNode.ring.position.x = snapped.x;
-            STATE.internetNode.ring.position.z = snapped.z;
-        } else if (draggedNode.mesh) {
-            draggedNode.mesh.position.x = snapped.x;
-            draggedNode.mesh.position.z = snapped.z;
-        }
-
-        updateConnectionsForNode(draggedNode.id);
-
+        settleNode(draggedNode, dragStartPos);
         draggedNode = null;
         container.style.cursor = "default";
     }
@@ -3567,13 +3566,132 @@ function clearCurrentGame() {
     STATE.internetNode.connections = [];
 }
 
-// ==================== M2 TOUCH WIRING (issue #8) ====================
+// ==================== M2 TOUCH WIRING (issues #8/#9) ====================
 // Touch flows through the same gesture recognizer as the mouse
-// (src/input/gestures.js); the M0 throwaway spike is gone. Read-only camera
-// interactions for this issue: tap = 点选 (select + live detail tooltip),
-// single-finger drag = camera pan, two-finger pinch = zoom (moving the
-// midpoint also pans). A single-finger drag never moves a service — the
-// long-press 抬起 flow ships with the move-service issue.
+// (src/input/gestures.js); the M0 throwaway spike is gone. Tap = 点选
+// (select + live detail tooltip, and via the mouse replay every tool —
+// build, connect, delete, repair — acts like a desktop click), single-finger
+// drag = camera pan, two-finger pinch = zoom (moving the midpoint also
+// pans). Moving a service needs a deliberate long-press 抬起 first (#9):
+// the node visibly rises and the device buzzes, then it follows the finger
+// and settles on the grid when released. A single-finger drag without a
+// lift never moves a service.
+
+// ---- 抬起 (lift) state ----
+// Lift feedback = rise + slight grow. These are the visual channels that
+// work everywhere: the haptic buzz is a no-op on iOS Safari, and an
+// emissive highlight would be repainted every frame by the health visuals
+// (Service.updateHealthVisual), while position.y and scale are untouched by
+// them. The internet node's ground ring deliberately stays down — during a
+// lift-drag it tracks x/z on the floor, marking the landing tile.
+const LIFT_RAISE_Y = 1.2;
+const LIFT_SCALE = 1.15;
+let liftedNode = null;
+// A long-press over empty ground lifts nothing; the rest of that gesture
+// pans the camera instead so the finger never dead-ends.
+let liftPanFallback = false;
+let liftedMeshBaseY = 0;
+const liftedMeshBaseScale = new THREE.Vector3(1, 1, 1);
+const liftOffset = new THREE.Vector3();
+const liftStartPos = new THREE.Vector3();
+
+// Ray-to-ground-plane hit, ignoring meshes. The desktop drag raycasts
+// against the scene (its cursor slides off the mesh onto the ground), but a
+// finger sits on top of the lifted mesh almost the whole time — raycasting
+// through it to the plane is what keeps the node tracking the finger.
+function groundPoint(clientX, clientY) {
+    mouse.x = (clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const target = new THREE.Vector3();
+    return raycaster.ray.intersectPlane(plane, target);
+}
+
+// A lift can outlive its node: game over / restart while a finger is down
+// destroys the service meshes. Settling a dead node would resurrect its
+// mesh position bookkeeping, so drops and cancels first check liveness.
+function liftedNodeAlive() {
+    return (
+        liftedNode === STATE.internetNode || STATE.services.includes(liftedNode)
+    );
+}
+
+function handleLiftIntent({ x, y }) {
+    liftPanFallback = false;
+    if (!STATE.isRunning) return;
+    const i = getIntersect(x, y);
+    let node = null;
+    if (i.type === "service") {
+        node = STATE.services.find((s) => s.id === i.id) || null;
+    } else if (i.type === "internet") {
+        node = STATE.internetNode;
+    }
+    if (!node) {
+        // The fallback drag is a camera pan, so clear the hover UI exactly
+        // like handlePanStartIntent would — a tooltip pinned from an earlier
+        // tap must not drift against the panning camera.
+        touchHideHoverUI();
+        liftPanFallback = true;
+        return;
+    }
+    liftedNode = node;
+    liftStartPos.copy(node.position);
+    const p = groundPoint(x, y);
+    if (p) liftOffset.copy(node.position).sub(p);
+    else liftOffset.set(0, 0, 0);
+    liftOffset.y = 0;
+    if (node.mesh) {
+        liftedMeshBaseY = node.mesh.position.y;
+        liftedMeshBaseScale.copy(node.mesh.scale);
+        node.mesh.position.y = liftedMeshBaseY + LIFT_RAISE_Y;
+        node.mesh.scale.multiplyScalar(LIFT_SCALE);
+    }
+    touchHideHoverUI();
+    haptics.vibrate(30);
+}
+
+function handleLiftDragIntent({ x, y, dx, dy }) {
+    if (!liftedNode) {
+        if (liftPanFallback && STATE.isRunning) touchPanCamera(dx, dy);
+        return;
+    }
+    if (!liftedNodeAlive()) return;
+    const p = groundPoint(x, y);
+    if (!p) return;
+    const newPos = p.add(liftOffset);
+    newPos.y = 0;
+    moveNodeTo(liftedNode, newPos);
+}
+
+// Restore the recorded absolute height/scale rather than undoing the raise
+// relatively: a mid-lift reset may already have repositioned the mesh, and
+// a relative lower would then sink or shrink it past its resting state.
+function lowerLiftedMesh() {
+    if (liftedNode.mesh) {
+        liftedNode.mesh.position.y = liftedMeshBaseY;
+        liftedNode.mesh.scale.copy(liftedMeshBaseScale);
+    }
+}
+
+function handleLiftDropIntent() {
+    liftPanFallback = false;
+    if (!liftedNode) return;
+    if (liftedNodeAlive()) {
+        lowerLiftedMesh();
+        settleNode(liftedNode, liftStartPos);
+    }
+    liftedNode = null;
+}
+
+function handleLiftCancelIntent() {
+    liftPanFallback = false;
+    if (!liftedNode) return;
+    if (liftedNodeAlive()) {
+        lowerLiftedMesh();
+        moveNodeTo(liftedNode, liftStartPos);
+    }
+    liftedNode = null;
+}
 
 function touchPanCamera(dx, dy) {
     // Track the finger ~1:1 (a drag should keep the map under the finger).
