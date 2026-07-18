@@ -896,6 +896,11 @@ function resetGame(mode = "survival") {
     const failuresPanel = document.getElementById("failures-panel");
     if (failuresPanel) failuresPanel.classList.add("hidden");
 
+    // M3-b (issue #11): a fresh run starts with the canvas unobstructed and
+    // no stale service pinned in the sheet's details tab.
+    sheetSelectedServiceId = null;
+    collapseSheet();
+
     // Initialize balance overhaul state
     STATE.elapsedGameTime = 0;
     STATE.gameStartTime = performance.now();
@@ -2115,6 +2120,19 @@ function handleTapIntent({ x, y }) {
     handleHoverIntent({ x, y });
     handlePressIntent({ x, y });
     handleReleaseIntent({ x, y });
+
+    // M3-b (issue #11): on a small screen, 点选 a service with the select
+    // tool opens the bottom sheet's details tab — the pinned tooltip is a
+    // desktop affordance. Other tools stay drawer-free: a half-screen sheet
+    // popping up mid connect/build/delete would cover the next tap target.
+    if (isSmallScreen() && STATE.activeTool === "select") {
+        const i = getIntersect(x, y);
+        if (i.type === "service") {
+            sheetSelectedServiceId = i.id;
+            openSheet("details");
+            touchHideHoverUI();
+        }
+    }
 }
 
 function handlePressIntent({ x, y }) {
@@ -2417,38 +2435,7 @@ function handleHoverAt(x, y) {
             }
 
             content += `<div class="mt-1 border-t border-gray-700 pt-1">`;
-
-            // Service-specific dynamic stats
-            if (s.type === "apigw") {
-                const rateLimit = s.config.rateLimit || 20;
-                const rateUsed = s.rateCounter || 0;
-                const rateColor = rateUsed > rateLimit ? "text-red-400" : rateUsed > rateLimit * 0.7 ? "text-yellow-400" : "text-green-400";
-                content += `${i18n.t('queue_label')} <span class="${loadColor}">${s.queue.length}</span><br>
-                ${i18n.t('load_label')} <span class="${loadColor}">${s.processing.length}/${s.config.capacity}</span><br>
-                ${i18n.t('rate_limit_label')} <span class="${rateColor}">${rateUsed}/${rateLimit} RPS</span>`;
-            } else if (s.type === "cache") {
-                const hitRate = Math.round((s.config.cacheHitRate || 0.35) * 100);
-                content += `${i18n.t('queue_label')} <span class="${loadColor}">${s.queue.length}</span><br>
-                ${i18n.t('load_label')} <span class="${loadColor}">${s.processing.length}/${s.config.capacity}</span><br>
-                ${i18n.t('hit_rate_label')} <span class="text-green-400">${hitRate}%</span>`;
-            } else if (s.type === "sqs") {
-                const maxQ = s.config.maxQueueSize || 200;
-                const fillPercent = Math.round((s.queue.length / maxQ) * 100);
-                const status =
-                    fillPercent > 80 ? i18n.t('status_critical') : fillPercent > 50 ? i18n.t('status_busy') : i18n.t('status_healthy');
-                const statusColor =
-                    fillPercent > 80
-                        ? "text-red-400"
-                        : fillPercent > 50
-                            ? "text-yellow-400"
-                            : "text-green-400";
-                content += `${i18n.t('buffered_label')} <span class="${loadColor}">${s.queue.length}/${maxQ}</span><br>
-                ${i18n.t('processing_label')} ${s.processing.length}/${s.config.capacity}<br>
-                ${i18n.t('status_label')} <span class="${statusColor}">${status}</span>`;
-            } else {
-                content += `${i18n.t('queue_label')} <span class="${loadColor}">${s.queue.length}</span><br>
-                ${i18n.t('load_label')} <span class="${loadColor}">${s.processing.length}/${s.config.capacity}</span>`;
-            }
+            content += buildServiceLoadStatsHtml(s, loadColor);
             content += `</div>`;
 
             // Show upgrade option for upgradeable services
@@ -2568,6 +2555,40 @@ function handleHoverAt(x, y) {
             document.getElementById('failures-panel').classList.add('hidden');
             document.getElementById('failures-total').textContent = `0 ${i18n.t('total')}`;
         })
+
+// Per-type live load/queue stats, shared verbatim by the desktop hover
+// tooltip and the small-screen bottom sheet's details tab (issue #11).
+function buildServiceLoadStatsHtml(s, loadColor) {
+    if (s.type === "apigw") {
+        const rateLimit = s.config.rateLimit || 20;
+        const rateUsed = s.rateCounter || 0;
+        const rateColor = rateUsed > rateLimit ? "text-red-400" : rateUsed > rateLimit * 0.7 ? "text-yellow-400" : "text-green-400";
+        return `${i18n.t('queue_label')} <span class="${loadColor}">${s.queue.length}</span><br>
+                ${i18n.t('load_label')} <span class="${loadColor}">${s.processing.length}/${s.config.capacity}</span><br>
+                ${i18n.t('rate_limit_label')} <span class="${rateColor}">${rateUsed}/${rateLimit} RPS</span>`;
+    } else if (s.type === "cache") {
+        const hitRate = Math.round((s.config.cacheHitRate || 0.35) * 100);
+        return `${i18n.t('queue_label')} <span class="${loadColor}">${s.queue.length}</span><br>
+                ${i18n.t('load_label')} <span class="${loadColor}">${s.processing.length}/${s.config.capacity}</span><br>
+                ${i18n.t('hit_rate_label')} <span class="text-green-400">${hitRate}%</span>`;
+    } else if (s.type === "sqs") {
+        const maxQ = s.config.maxQueueSize || 200;
+        const fillPercent = Math.round((s.queue.length / maxQ) * 100);
+        const status =
+            fillPercent > 80 ? i18n.t('status_critical') : fillPercent > 50 ? i18n.t('status_busy') : i18n.t('status_healthy');
+        const statusColor =
+            fillPercent > 80
+                ? "text-red-400"
+                : fillPercent > 50
+                    ? "text-yellow-400"
+                    : "text-green-400";
+        return `${i18n.t('buffered_label')} <span class="${loadColor}">${s.queue.length}/${maxQ}</span><br>
+                ${i18n.t('processing_label')} ${s.processing.length}/${s.config.capacity}<br>
+                ${i18n.t('status_label')} <span class="${statusColor}">${status}</span>`;
+    }
+    return `${i18n.t('queue_label')} <span class="${loadColor}">${s.queue.length}</span><br>
+                ${i18n.t('load_label')} <span class="${loadColor}">${s.processing.length}/${s.config.capacity}</span>`;
+}
 
 // Helper function for showing tooltips
 function showTooltip(x, y, html) {
@@ -2884,6 +2905,11 @@ function animate(time) {
             if (tooltipEl && tooltipEl.style.display === "block") {
                 input.replayMouse("mousemove", lastPointerPos.x, lastPointerPos.y);
             }
+        }
+        // M3-b (issue #11): the bottom sheet's details tab is the mobile
+        // counterpart of the live tooltip — refresh it at the same cadence.
+        if (isSheetExpanded() && sheetTab === "details") {
+            renderSheetServiceDetail();
         }
     }
 
@@ -3770,6 +3796,200 @@ input.on("touchstart", (e) => feedTouch("touch-start", e), { passive: false });
 input.on("touchmove", (e) => feedTouch("touch-move", e), { passive: false });
 input.on("touchend", (e) => feedTouch("touch-end", e), { passive: false });
 input.on("touchcancel", () => gestures.handle({ type: "touch-cancel" }));
+
+// ==================== M3-b BOTTOM SHEET (issue #11) ====================
+// 底部抽屉: below the breakpoint the desktop corner panels' content lives in
+// a bottom sheet with 财务/健康/详情 tabs. Finances and health are the very
+// same DOM nodes as the desktop panels — mountSheetPanels() reparents them
+// across the breakpoint, so the per-frame updates (which address elements
+// by id) work identically in both layouts. The details tab replaces the
+// desktop hover tooltip: 点选 a service (select tool) opens it, and the
+// animate loop re-renders it at the tooltip-refresh cadence. All sheet
+// listeners sit on the sheet's own DOM, never on the canvas, so its
+// gestures cannot collide with camera panning.
+
+const sheetEls = {
+    handleRow: document.getElementById("sheet-handle-row"),
+    handle: document.getElementById("sheet-handle"),
+    panel: document.getElementById("sheet-panel"),
+    header: document.getElementById("sheet-header"),
+    close: document.getElementById("sheet-close"),
+    detail: document.getElementById("sheet-service-detail"),
+    repairBtn: document.getElementById("sheet-repair-btn"),
+    panes: {
+        finances: document.getElementById("sheet-pane-finances"),
+        health: document.getElementById("sheet-pane-health"),
+        details: document.getElementById("sheet-pane-details"),
+    },
+    tabs: Array.from(document.querySelectorAll("[data-sheet-tab]")),
+};
+
+let sheetTab = "finances";
+let sheetSelectedServiceId = null;
+let sheetLastDetailHtml = null;
+
+// The reparented panel pieces, with their desktop slots recorded up front
+// (homeNext may be a text node — insertBefore restores the exact position).
+const sheetMounts = [
+    { id: "finances-panel-content", sheetParent: sheetEls.panes.finances },
+    { id: "auto-repair-toggle", sheetParent: document.getElementById("sheet-health-toolbar") },
+    { id: "health-panel-content", sheetParent: sheetEls.panes.health },
+].map((m) => {
+    const el = document.getElementById(m.id);
+    return el
+        ? { ...m, el, homeParent: el.parentNode, homeNext: el.nextSibling }
+        : null;
+}).filter(Boolean);
+
+function mountSheetPanels() {
+    const small = isSmallScreen();
+    for (const m of sheetMounts) {
+        if (small) {
+            if (m.el.parentNode !== m.sheetParent) m.sheetParent.appendChild(m.el);
+        } else if (m.el.parentNode !== m.homeParent) {
+            m.homeParent.insertBefore(m.el, m.homeNext);
+        }
+    }
+    // The desktop collapse toggles may have hidden the content; inside the
+    // sheet the tabs are the only visibility control. Returning to desktop
+    // keeps it visible, so re-sync the toggle icons to the expanded state.
+    ["finances-panel-content", "health-panel-content"].forEach((id) => {
+        document.getElementById(id)?.classList.remove("hidden");
+    });
+    ["finances-panel-icon", "health-panel-icon"].forEach((id) => {
+        const icon = document.getElementById(id);
+        if (icon) icon.innerText = "▲";
+    });
+}
+smallScreenQuery.addEventListener("change", mountSheetPanels);
+mountSheetPanels();
+
+function isSheetExpanded() {
+    return !sheetEls.panel.classList.contains("hidden");
+}
+
+function selectSheetTab(tab) {
+    sheetTab = tab;
+    sheetEls.tabs.forEach((btn) =>
+        btn.classList.toggle("active", btn.dataset.sheetTab === tab)
+    );
+    Object.entries(sheetEls.panes).forEach(([name, pane]) =>
+        pane.classList.toggle("hidden", name !== tab)
+    );
+}
+
+function openSheet(tab) {
+    selectSheetTab(tab || sheetTab);
+    sheetEls.panel.classList.remove("hidden");
+    sheetEls.handleRow.classList.add("hidden");
+    renderSheetServiceDetail();
+}
+
+function collapseSheet() {
+    sheetEls.panel.classList.add("hidden");
+    sheetEls.handleRow.classList.remove("hidden");
+}
+
+function sheetService() {
+    return STATE.services.find((s) => s.id === sheetSelectedServiceId) || null;
+}
+
+function renderSheetServiceDetail() {
+    if (!sheetEls.detail) return;
+    const s = sheetService();
+    let html;
+    let repairCost = null;
+    if (!s) {
+        html = `<div class="text-gray-500 text-xs font-sans">${i18n.t('sheet_no_selection')}</div>`;
+    } else {
+        const load = s.processing.length / s.config.capacity;
+        const loadColor =
+            load > 0.8
+                ? "text-red-400"
+                : load > 0.4
+                    ? "text-yellow-400"
+                    : "text-green-400";
+        const healthColor =
+            s.health < 40
+                ? "text-red-400"
+                : s.health < 70
+                    ? "text-yellow-400"
+                    : "text-green-400";
+        html = `<div class="flex justify-between items-center">
+            <strong class="text-blue-300">${i18n.t(s.type)}${s.tier ? ` <span class="text-xs text-yellow-400">T${s.tier}</span>` : ""}</strong>
+            <span class="${healthColor}">${Math.round(s.health)}%</span>
+        </div>`;
+        if (s.config.tooltip) {
+            html += `<div class="text-xs text-gray-400 font-sans mt-1">${i18n.t(s.type + '_desc')}</div>`;
+            html += `<div class="text-xs text-gray-500 mt-1">${i18n.t('upkeep_label')} <span class="text-gray-300">${i18n.t(s.config.tooltip.upkeep.toLowerCase().replace(' ', '_'))}</span></div>`;
+        }
+        html += `<div class="mt-2 border-t border-gray-700 pt-2 text-xs leading-5">${buildServiceLoadStatsHtml(s, loadColor)}</div>`;
+        if (CONFIG.survival.degradation?.enabled && s.health < 100) {
+            repairCost = Math.ceil(
+                s.config.cost *
+                (CONFIG.survival.degradation?.repairCostPercent || 0.15)
+            );
+        }
+    }
+    if (html !== sheetLastDetailHtml) {
+        sheetLastDetailHtml = html;
+        sheetEls.detail.innerHTML = html;
+    }
+    if (sheetEls.repairBtn) {
+        sheetEls.repairBtn.classList.toggle("hidden", repairCost === null);
+        if (repairCost !== null) {
+            sheetEls.repairBtn.textContent = `🔧 ${i18n.t('repair')} $${repairCost}`;
+        }
+    }
+}
+
+sheetEls.handle?.addEventListener("click", () => openSheet(sheetTab));
+sheetEls.close?.addEventListener("click", collapseSheet);
+sheetEls.tabs.forEach((btn) =>
+    btn.addEventListener("click", () => openSheet(btn.dataset.sheetTab))
+);
+sheetEls.repairBtn?.addEventListener("click", () => {
+    const svc = sheetService();
+    if (svc && svc.repair()) {
+        addInterventionWarning(
+            i18n.t('repaired_msg', { type: i18n.t(svc.type) }),
+            "info",
+            2000
+        );
+        renderSheetServiceDetail();
+    }
+});
+
+// Pull-out / collapse swipe on the sheet's own surfaces (UI-layer listeners
+// on named elements — the platform input adapter only owns the canvas).
+// A touch that starts on a tab button is a tap-in-progress, not a drag:
+// letting it collapse the sheet would turn a slightly slid tab press into a
+// surprise dismissal.
+function attachSheetSwipe(el, onSwipeDy) {
+    if (!el) return;
+    let startY = null;
+    el.addEventListener(
+        "touchstart",
+        (e) => {
+            startY = e.target.closest(".sheet-tab")
+                ? null
+                : e.touches[0]?.clientY ?? null;
+        },
+        { passive: true }
+    );
+    el.addEventListener("touchend", (e) => {
+        if (startY === null) return;
+        const dy = (e.changedTouches[0]?.clientY ?? startY) - startY;
+        startY = null;
+        onSwipeDy(dy);
+    });
+}
+attachSheetSwipe(sheetEls.header, (dy) => {
+    if (dy > 40) collapseSheet();
+});
+attachSheetSwipe(sheetEls.handle, (dy) => {
+    if (dy < -20) openSheet(sheetTab);
+});
 
 // Transitional global bridge (ADR-0002 expand step): these are referenced by
 // inline HTML handlers or by the src/ scripts, which still resolve them as

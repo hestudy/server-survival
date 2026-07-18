@@ -508,7 +508,13 @@ const PT_BR_TRANSLATIONS = {
     "campaign_locked": "Locked",
     // M3-a (issue #10): English placeholder — proper translation lands in the
     // nine-language wrap-up ticket. Placeholder beats rendering the raw key.
-    "mobile_modes_hint": "📱 Campaign, Sandbox and the Tutorial are not yet adapted for small screens — play them in a desktop browser."
+    "mobile_modes_hint": "📱 Campaign, Sandbox and the Tutorial are not yet adapted for small screens — play them in a desktop browser.",
+    // M3-b (issue #11): English placeholders — proper translations land in
+    // the nine-language wrap-up ticket. Placeholder beats the raw key.
+    "sheet_details": "Details",
+    "sheet_no_selection": "Tap a service to see its live details",
+    "sheet_toggle": "Open panels",
+    "sheet_collapse": "Collapse"
 };
 
 // Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.

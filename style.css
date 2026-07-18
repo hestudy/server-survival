@@ -44,6 +44,11 @@ body {
   display: none;
 }
 
+/* M3-b (issue #11): the bottom sheet (底部抽屉) is small-screen-only. */
+#bottom-sheet {
+  display: none;
+}
+
 @media (max-width: 1023px) {
   /* Corner panels off — the canvas must not be covered by persistent UI. */
   #statsPanel,
@@ -110,6 +115,100 @@ body {
   }
   #mobile-modes-hint {
     display: block;
+  }
+
+  /* M3-b (issue #11): time controls meet the ~44px touch target. The
+     service buttons in the bottom toolbar are already 64px. */
+  #time-control-panel .time-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  #time-control-panel {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #lang-select {
+    min-height: 2.75rem;
+  }
+
+  /* M3-b (issue #11): bottom sheet (底部抽屉). Collapsed, only the handle
+     pill floats above the toolbar — the canvas stays unobstructed.
+     Expanded, the panel overlays the bottom of the screen (including the
+     toolbar; collapse to reach it again). All sheet gestures live on the
+     sheet's own DOM, so they can never conflict with canvas panning. */
+  #bottom-sheet {
+    display: block;
+  }
+
+  /* The toolbar spans the bottom ~104px (24px offset + 80px height); the
+     handle floats just above it. The button is 44px tall for the touch
+     target, but only the inner grip pill is visible. */
+  #sheet-handle-row {
+    position: fixed;
+    bottom: 108px;
+    left: 0;
+    right: 0;
+  }
+  #sheet-handle {
+    height: 44px;
+    min-width: 96px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    padding: 0 0 4px;
+  }
+  #sheet-handle .sheet-grip {
+    background: rgba(148, 163, 184, 0.9);
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+  }
+  .sheet-grip {
+    display: block;
+    width: 48px;
+    height: 5px;
+    border-radius: 9999px;
+    background: rgba(148, 163, 184, 0.5);
+  }
+
+  #sheet-panel {
+    display: flex;
+    flex-direction: column;
+    max-height: 55vh;
+    border-radius: 16px 16px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+  }
+  #sheet-panel.hidden {
+    display: none;
+  }
+  /* The header is the drag surface for the pull-out/collapse gesture. */
+  #sheet-header {
+    touch-action: none;
+    flex-shrink: 0;
+  }
+  #sheet-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .sheet-tab {
+    min-height: 44px;
+    min-width: 44px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: rgba(31, 41, 55, 0.6);
+    color: #9ca3af;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .sheet-tab.active {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: #38bdf8;
+    color: #fff;
   }
 }
 

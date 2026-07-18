@@ -506,7 +506,12 @@ const ZH_TRANSLATIONS = {
     "campaign_chapter_3": "Chapter 3: Defense & Mastery",
     "campaign_locked": "Locked",
     // M3-a responsive HUD (issue #10)
-    "mobile_modes_hint": "📱 战役、沙盒与教程暂未适配小屏,请在桌面端浏览器体验完整内容。"
+    "mobile_modes_hint": "📱 战役、沙盒与教程暂未适配小屏,请在桌面端浏览器体验完整内容。",
+    // M3-b bottom sheet (issue #11)
+    "sheet_details": "详情",
+    "sheet_no_selection": "点选一个服务查看实时详情",
+    "sheet_toggle": "展开面板",
+    "sheet_collapse": "收起"
 };
 
 // Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.

@@ -140,10 +140,11 @@ A fully customizable testing environment for experimenting with any architecture
 - **Left Click:** Select tools, place services, and connect nodes.
 - **Right Click + Drag:** Pan the camera.
 - **Scroll:** Zoom in and out.
-- **Touch — Tap:** Select a service and see its live details (the hover tooltip info); with a build tool active, tap an empty tile to place.
+- **Touch — Tap:** Select a service and see its live details (on small screens they open in the bottom sheet's Details tab); with a build tool active, tap an empty tile to place.
 - **Touch — One-Finger Drag:** Pan the camera (never moves services).
 - **Touch — Two-Finger Pinch:** Zoom (moving the midpoint also pans).
 - **Touch — Long-Press (~350ms) a service:** Lift it (it rises, with a vibration where supported), then drag to move it; release to snap it onto the grid.
+- **Touch — Bottom Sheet (small screens):** Tap the handle above the toolbar to open the Finances / Service Health / Details tabs; swipe down on its header (or tap ▼) to collapse it and free the canvas.
 - **WASD / Arrows:** Move camera (pan) when zoomed in.
 - **ESC:** Open main menu and pause game. Press again or click Resume to close menu (stays paused).
 - **Camera Reset:** Press `R` to reset the camera position.
