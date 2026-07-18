@@ -734,6 +734,50 @@
     </div>
   </div>
 
+  <!-- M3-b (issue #11): small-screen bottom sheet (底部抽屉). Hidden on
+       desktop (>=1024px, see style.css). The finances and health tab panes
+       are mount points: game.js reparents the desktop corner panels'
+       content (#finances-panel-content, #auto-repair-toggle,
+       #health-panel-content) into them below the breakpoint and back above
+       it, so both layouts share one DOM. Collapsed, only the handle pill
+       above the toolbar remains; expanded, the panel overlays the bottom of
+       the screen and the canvas keeps working behind it. -->
+  <div id="bottom-sheet" class="fixed bottom-0 left-0 right-0 z-30 pointer-events-none">
+    <div id="sheet-handle-row" class="flex justify-center">
+      <button id="sheet-handle" class="pointer-events-auto" data-i18n-title="sheet_toggle" title="Panels">
+        <span class="sheet-grip"></span>
+      </button>
+    </div>
+    <div id="sheet-panel" class="glass-panel pointer-events-auto hidden">
+      <div id="sheet-header">
+        <div class="flex justify-center pt-1 pb-0.5">
+          <span class="sheet-grip"></span>
+        </div>
+        <div class="flex items-stretch gap-1 px-2 pb-1">
+          <button class="sheet-tab flex-1" data-sheet-tab="finances" data-i18n="finances">Finances</button>
+          <button class="sheet-tab flex-1" data-sheet-tab="health" data-i18n="service_health">Service Health</button>
+          <button class="sheet-tab flex-1" data-sheet-tab="details" data-i18n="sheet_details">Details</button>
+          <button id="sheet-close" class="sheet-tab" data-i18n-title="sheet_collapse" title="Collapse">▼</button>
+        </div>
+      </div>
+      <div id="sheet-body" class="px-4 pb-4 pt-2">
+        <div id="sheet-pane-finances" class="sheet-pane"></div>
+        <div id="sheet-pane-health" class="sheet-pane hidden">
+          <div id="sheet-health-toolbar" class="flex justify-end mb-2"></div>
+        </div>
+        <div id="sheet-pane-details" class="sheet-pane hidden">
+          <div id="sheet-service-detail" class="text-sm font-mono"></div>
+          <!-- Stable element (not part of the 4 Hz re-render) so a tap can
+               never land on a just-replaced node. -->
+          <button id="sheet-repair-btn"
+            class="hidden mt-3 w-full min-h-[44px] rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-bold uppercase font-mono">
+            🔧
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Hover Tooltip -->
   <div id="tooltip" class="tooltip"></div>
 

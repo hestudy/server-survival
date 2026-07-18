@@ -498,7 +498,12 @@ const EN_TRANSLATIONS = {
     "campaign_locked": "Locked",
     // M3-a responsive HUD (issue #10). zh has the translation; the other
     // seven locales get theirs in the wrap-up ticket.
-    "mobile_modes_hint": "📱 Campaign, Sandbox and the Tutorial are not yet adapted for small screens — play them in a desktop browser."
+    "mobile_modes_hint": "📱 Campaign, Sandbox and the Tutorial are not yet adapted for small screens — play them in a desktop browser.",
+    // M3-b bottom sheet (issue #11)
+    "sheet_details": "Details",
+    "sheet_no_selection": "Tap a service to see its live details",
+    "sheet_toggle": "Open panels",
+    "sheet_collapse": "Collapse"
 };
 
 // Transitional global bridge (ADR-0002 expand step): read by src/i18n.js.
