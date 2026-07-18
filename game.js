@@ -10,6 +10,7 @@ import { SoundService, playClickSfx, playSelectSfx } from "./src/platform/audio.
 import { createWebInputSource } from "./src/platform/input.js";
 import { haptics } from "./src/platform/haptics.js";
 import { createGestureRecognizer } from "./src/input/gestures.js";
+import { createParticleBudget, createQualityGovernor } from "./src/render/perf.js";
 
 STATE.sound = new SoundService();
 
@@ -32,6 +33,17 @@ function isSmallScreen() {
 
 STATE.world.requestFactory = (world, type) => new Request(type);
 
+// 500ms death flash, then dispose. Requests beyond the particle cap
+// (issue #12) have no mesh — nothing to flash, they leave immediately.
+function flashThenDestroy(req, colorHex) {
+    if (req.mesh) {
+        req.mesh.material.color.setHex(colorHex);
+        setTimeout(() => req.destroy(), 500);
+    } else {
+        req.destroy();
+    }
+}
+
 STATE.world.hooks = {
     onFinished(req, viaServiceType) {
         STATE.requestsProcessed++;
@@ -49,14 +61,12 @@ STATE.world.hooks = {
         }
         updateScoreUI();
         STATE.sound.playFail();
-        req.mesh.material.color.setHex(CONFIG.colors.requestFail);
-        setTimeout(() => req.destroy(), 500);
+        flashThenDestroy(req, CONFIG.colors.requestFail);
     },
     onThrottled(req) {
         updateScoreUI();
         STATE.sound.playFail();
-        req.mesh.material.color.setHex(CONFIG.colors.apigw); // Pink flash for throttled
-        setTimeout(() => req.destroy(), 500);
+        flashThenDestroy(req, CONFIG.colors.apigw); // Pink flash for throttled
     },
     onBlocked(req) {
         updateScoreUI();
@@ -772,6 +782,10 @@ let isIsometric = true;
 resetCamera();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+// Performance baseline (issue #12): small screens render at device
+// resolution capped at 2; the desktop-freeze breakpoint stays at the
+// pre-#12 pixelRatio 1 (see tierPixelRatio, hoisted from the perf block).
+renderer.setPixelRatio(tierPixelRatio(0));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 container.appendChild(renderer.domElement);
@@ -830,6 +844,138 @@ internetRing.position.set(
 );
 scene.add(internetRing);
 STATE.internetNode.ring = internetRing;
+
+// ==================== PERFORMANCE BASELINE (issue #12) ====================
+// Render-layer only: the particle budget gates request meshes (the sim is
+// untouched — parity pinned in src/render/particle-cap.parity.test.js) and
+// the quality governor steps the 降阶档位 ladder in CONFIG.perf.tiers when
+// real frame times stay low, stepping back up once fps recovers. The active
+// tier is recorded on STATE.perf and visible via the ?perf=1 debug overlay.
+
+const particleBudget = createParticleBudget(CONFIG.perf.tiers[0].particleCap);
+window.particleBudget = particleBudget; // read by src/entities/Request.js
+
+STATE.perf = {
+    tier: 0,
+    tierName: CONFIG.perf.tiers[0].name,
+    fps: 60,
+    simpleMaterials: false,
+};
+
+const qualityGovernor = createQualityGovernor({
+    tierCount: CONFIG.perf.tiers.length,
+    ...CONFIG.perf.governor,
+    onChange: applyQualityTier,
+});
+
+// The one place pixel ratio is computed (renderer init, tier changes and
+// resizes all call it). 桌面冻结: at the wide breakpoint the ceiling is the
+// pre-#12 rendering (pixelRatio 1) — the dpr≤2 upgrade is a small-screen
+// (mobile) feature only, so a HiDPI desktop can never regress below its
+// pre-#12 frame rate on the shadows-on tiers.
+function tierPixelRatio(tierIndex) {
+    const ceiling = isSmallScreen() ? window.devicePixelRatio || 1 : 1;
+    return Math.min(ceiling, CONFIG.perf.tiers[tierIndex].pixelRatio);
+}
+
+function applyQualityTier(tierIndex) {
+    const tier = CONFIG.perf.tiers[tierIndex];
+    STATE.perf.tier = tierIndex;
+    STATE.perf.tierName = tier.name;
+
+    renderer.setPixelRatio(tierPixelRatio(tierIndex));
+    // setPixelRatio only takes effect on the next setSize.
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    if (renderer.shadowMap.enabled !== tier.shadows) {
+        renderer.shadowMap.enabled = tier.shadows;
+        dirLight.castShadow = tier.shadows;
+        // The shadow-map toggle only reaches the shaders after a recompile.
+        scene.traverse((obj) => {
+            if (obj.material) obj.material.needsUpdate = true;
+        });
+    }
+
+    particleBudget.setCap(tier.particleCap);
+    setMaterialQuality(tier.simpleMaterials);
+    console.info(`[perf] quality tier -> ${tierIndex} (${tier.name})`);
+}
+
+// 简化材质: swap the PBR MeshStandardMaterials (services, internet node)
+// for cheap MeshLambertMaterials on low tiers, and restore them — carrying
+// over any dynamic tint (health, selection emissive) — on recovery. All
+// game code reads mesh.material afresh every frame, so swapping the object
+// is safe mid-game.
+function setMeshMaterialQuality(mesh, simple) {
+    const mat = mesh.material;
+    if (!mat) return;
+    if (simple) {
+        if (!mat.isMeshStandardMaterial) return; // already simple (or Basic)
+        const lite = new THREE.MeshLambertMaterial({
+            color: mat.color.getHex(),
+            emissive: mat.emissive ? mat.emissive.getHex() : 0x000000,
+            emissiveIntensity: mat.emissiveIntensity ?? 1,
+            transparent: mat.transparent,
+            opacity: mat.opacity,
+            side: mat.side,
+            wireframe: mat.wireframe,
+        });
+        mesh.userData.perfFullMat = mat;
+        mesh.material = lite;
+    } else {
+        const full = mesh.userData.perfFullMat;
+        if (!full) return;
+        full.color.copy(mat.color);
+        if (full.emissive && mat.emissive) full.emissive.copy(mat.emissive);
+        full.emissiveIntensity = mat.emissiveIntensity;
+        full.transparent = mat.transparent;
+        full.opacity = mat.opacity;
+        mat.dispose();
+        mesh.userData.perfFullMat = null;
+        mesh.material = full;
+    }
+}
+
+function setMaterialQuality(simple) {
+    STATE.perf.simpleMaterials = simple;
+    STATE.services.forEach(
+        (s) => s.mesh && setMeshMaterialQuality(s.mesh, simple)
+    );
+    setMeshMaterialQuality(internetMesh, simple);
+    setMeshMaterialQuality(internetRing, simple);
+}
+
+// Services placed or restored while degraded pick up the simple material
+// immediately (called from the Service constructor).
+window.applyMaterialQuality = (mesh) =>
+    setMeshMaterialQuality(mesh, STATE.perf.simpleMaterials);
+
+// Debug overlay for real-device verification (?perf=1). Diagnostics only —
+// not part of the game UI, so no i18n.
+const perfHudEnabled = new URLSearchParams(window.location.search).has("perf");
+let perfHudEl = null;
+let perfHudLastUpdate = 0;
+function updatePerfHud(now) {
+    if (!perfHudEnabled || now - perfHudLastUpdate < 500) return;
+    perfHudLastUpdate = now;
+    if (!perfHudEl) {
+        perfHudEl = document.createElement("div");
+        perfHudEl.id = "perf-hud";
+        perfHudEl.style.cssText =
+            "position:fixed;left:8px;bottom:8px;z-index:100;" +
+            "background:rgba(0,0,0,.7);color:#4ade80;font:11px monospace;" +
+            "padding:4px 8px;border-radius:4px;pointer-events:none;white-space:pre;";
+        document.body.appendChild(perfHudEl);
+    }
+    perfHudEl.textContent =
+        `fps ${qualityGovernor.fps.toFixed(0)} | tier ${STATE.perf.tier} (${STATE.perf.tierName})\n` +
+        `particles ${particleBudget.visible}/${particleBudget.cap} +${particleBudget.hidden} aggregated\n` +
+        `dpr ${(window.devicePixelRatio || 1).toFixed(2)} -> ${renderer.getPixelRatio().toFixed(2)}` +
+        ` | shadows ${renderer.shadowMap.enabled ? "on" : "off"}` +
+        ` | mats ${STATE.perf.simpleMaterials ? "simple" : "full"}`;
+}
+
+// ================== END PERFORMANCE BASELINE (issue #12) ==================
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -1007,6 +1153,9 @@ function resetGame(mode = "survival") {
     while (requestGroup.children.length > 0) {
         requestGroup.remove(requestGroup.children[0]);
     }
+    // New budget epoch: pending 500ms death-flash destroys from the old
+    // game must not release slots into the new one (issue #12).
+    particleBudget.reset();
     STATE.internetNode.connections = [];
     STATE.internetNode.position.set(
         CONFIG.internetNodeStartPos.x,
@@ -2719,6 +2868,14 @@ function animate(time) {
     const clampedDt = Math.min(rawDt, 0.1); // Max 100ms per frame
     const dt = clampedDt * STATE.timeScale;
     STATE.lastTime = time;
+
+    // Quality governor samples real (unscaled) frame time — pause/timeScale
+    // must never read as lag. Tier changes apply between frames via
+    // applyQualityTier, so the player is never interrupted.
+    qualityGovernor.frame(rawDt);
+    STATE.perf.fps = qualityGovernor.fps;
+    updatePerfHud(time);
+
     STATE.elapsedGameTime += dt;
     if (window.campaign?.active) window.campaign.tick(dt);
 
@@ -3089,10 +3246,22 @@ function animate(time) {
     }
 
     if (STATE.internetNode.ring) {
+        const ring = STATE.internetNode.ring;
+        // 聚合表现 (issue #12): traffic beyond the particle cap has no mesh
+        // of its own — its volume pulses the internet ring instead, so
+        // high-RPS pressure stays visible without per-request draw cost.
+        const aggregated = particleBudget.hidden;
         if (STATE.selectedNodeId === "internet") {
-            STATE.internetNode.ring.material.opacity = 1.0;
+            ring.material.opacity = 1.0;
+            ring.scale.setScalar(1);
+        } else if (aggregated > 0) {
+            const intensity = Math.min(1, aggregated / 100);
+            const pulse = 0.5 + 0.5 * Math.sin(time / 150);
+            ring.material.opacity = 0.2 + 0.4 * intensity * pulse;
+            ring.scale.setScalar(1 + 0.2 * intensity * pulse);
         } else {
-            STATE.internetNode.ring.material.opacity = 0.2;
+            ring.material.opacity = 0.2;
+            ring.scale.setScalar(1);
         }
     }
 
@@ -3210,6 +3379,9 @@ input.on("resize", () => {
     camera.top = d;
     camera.bottom = -d;
     camera.updateProjectionMatrix();
+    // devicePixelRatio and the breakpoint can change with a monitor move,
+    // browser zoom or window resize — re-apply the active tier (issue #12).
+    renderer.setPixelRatio(tierPixelRatio(STATE.perf.tier));
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
@@ -3620,6 +3792,7 @@ function clearCurrentGame() {
     while (requestGroup.children.length > 0) {
         requestGroup.remove(requestGroup.children[0]);
     }
+    particleBudget.reset();
 
     STATE.services.forEach((s) => s.destroy());
     STATE.services = [];
@@ -4006,6 +4179,9 @@ window.getUpkeepMultiplier = getUpkeepMultiplier;
 window.removeRequest = removeRequest;
 window.requestGroup = requestGroup;
 window.serviceGroup = serviceGroup;
+// Manual tier override for real-device verification (issue #12) — the
+// governor keeps running and may re-adjust on its own.
+window.applyQualityTier = applyQualityTier;
 window.throttleRequest = throttleRequest;
 window.renderCampaignObjectives = renderCampaignObjectives;
 window.showCampaignDebrief = showCampaignDebrief;

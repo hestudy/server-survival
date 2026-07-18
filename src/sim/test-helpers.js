@@ -96,6 +96,40 @@ export function runUntilDrained(world, { maxSeconds = 60, dt = STEP } = {}) {
     return t;
 }
 
+// A full survival-style run shared by the deterministic-replay and
+// particle-cap parity tests: mixed traffic through a realistic topology,
+// long enough (110 sim-seconds by default) to cross a traffic shift (40s),
+// a malicious spike (blocked by the shift at 45s, lands at 90s),
+// random-event checks (every 30s) and the first RPS milestone (60s).
+export function runSurvivalScenario(world, { seconds = 110 } = {}) {
+    const waf = world.addService("waf");
+    const alb = world.addService("alb");
+    const compute = world.addService("compute");
+    const cache = world.addService("cache");
+    const db = world.addService("db");
+    const s3 = world.addService("s3");
+    wire(world, "internet", waf);
+    wire(world, waf, alb);
+    wire(world, alb, compute);
+    wire(world, compute, cache);
+    wire(world, compute, db);
+    wire(world, compute, s3);
+    wire(world, cache, db);
+    wire(world, cache, s3);
+
+    const steps = Math.round(seconds / STEP);
+    for (let i = 0; i < steps; i++) {
+        // Spawn from the live distribution (so shifts and spikes change the
+        // mix) at the event-scaled rate, like the web loop does.
+        if (i % 4 === 0) {
+            const burst = world.events.trafficBurstMultiplier > 1 ? 2 : 1;
+            for (let n = 0; n < burst; n++) world.spawnRequest();
+        }
+        world.step(STEP);
+        world.events.targetRPS(); // milestone tracking is part of the run
+    }
+}
+
 export function terminalTotal(world) {
     const s = world.stats;
     return (
