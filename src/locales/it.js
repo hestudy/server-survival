@@ -142,8 +142,6 @@ const IT_TRANSLATIONS = {
     "low": "Basso",
     "medium": "Medio",
     "high": "Alto",
-    "very high": "Molto Alto",
-    "very low": "Molto Basso",
     "very_high": "Molto Alto",
     "free": "Gratuito",
     "current_objectives": "Obiettivi Correnti",

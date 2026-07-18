@@ -142,8 +142,6 @@ const FR_TRANSLATIONS = {
     "low": "Faible",
     "medium": "Moyen",
     "high": "Élevé",
-    "very high": "Très Élevé",
-    "very low": "Très Faible",
     "very_high": "Très élevé",
     "free": "Gratuit",
     "current_objectives": "Objectifs actuels",

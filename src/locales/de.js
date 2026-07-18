@@ -142,8 +142,6 @@ const DE_TRANSLATIONS = {
     "low": "Niedrig",
     "medium": "Mittel",
     "high": "Hoch",
-    "very high": "Sehr Hoch",
-    "very low": "Sehr Niedrig",
     "very_high": "Sehr Hoch",
     "free": "Gratis",
     "current_objectives": "Aktuelle Ziele",

@@ -142,8 +142,6 @@ const EN_TRANSLATIONS = {
     "low": "Low",
     "medium": "Medium",
     "high": "High",
-    "very high": "Very High",
-    "very low": "Very Low",
     "very_high": "Very High",
     "free": "Free",
     "current_objectives": "Current Objectives",

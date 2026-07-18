@@ -1,4 +1,5 @@
 import { storage } from './platform/storage.js';
+import { systemLanguages } from './platform/locale.js';
 import { pickLocale } from './pick-locale.js';
 
 /**
@@ -21,7 +22,7 @@ class I18nManager {
         // supported locales (spec story 19); an explicit picker choice
         // stored under game_locale always wins over detection.
         this.currentLocale = storage.get('game_locale') ||
-            pickLocale(navigator.languages || [navigator.language], Object.keys(this.translations));
+            pickLocale(systemLanguages(), Object.keys(this.translations));
     }
 
     setLocale(locale) {

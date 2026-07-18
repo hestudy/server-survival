@@ -167,8 +167,6 @@ const ZH_TRANSLATIONS = {
     "low": "低",
     "medium": "中",
     "high": "高",
-    "very high": "极高",
-    "very low": "极低",
     "very_high": "极高",
     "free": "免费",
     "current_objectives": "当前任务",

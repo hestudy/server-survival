@@ -142,8 +142,6 @@ const NE_TRANSLATIONS = {
     "low": "कम",
     "medium": "मध्यम",
     "high": "उच्च",
-    "very high": "धेरै उच्च",
-    "very low": "धेरै कम",
     "very_high": "धेरै उच्च",
     "free": "निःशुल्क",
     "current_objectives": "हालका उद्देश्यहरू",

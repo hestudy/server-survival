@@ -40,8 +40,7 @@
 
 ## 走查中发现并已修复的问题(本 issue 内)
 
-- **`data-i18n="in"` 键九语言全缺**(RPS 浪涌倒计时「×2.0 in 30s」),非英语界面裸露英文「in」→ 已补九语言并纳入自动检查;
-- **`very high` / `very low` 键九语言全缺**(DB / Serverless 的维护费 tooltip 经 `t(upkeep.toLowerCase())` 取键)→ 已补九语言;
+- **`data-i18n="in"` 键九语言全缺**(RPS 浪涌倒计时「×2.0 in 30s」),非英语界面裸露英文「in」→ 已补九语言并纳入自动检查;维护费 tooltip 的动态键(`very_high` / `very_low` 等,经 `t(upkeep.toLowerCase().replace(' ', '_'))` 取键)核验为已齐全,其归一化规则一并固化进自动检查;
 - **系统语言不自动检测**(故事 19 缺口:首次打开恒为英文)→ 新增 `pickLocale`(`src/pick-locale.js`),首启按 `navigator.languages` 匹配,显式选择(`game_locale`)始终优先。
 
 ## 留待真机复核项

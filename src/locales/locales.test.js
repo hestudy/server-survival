@@ -108,9 +108,9 @@ describe("every referenced key is defined in every locale", () => {
             used.add(`${id}_desc`);
         }
 
-        // t(config.tooltip.upkeep.toLowerCase())
+        // t(config.tooltip.upkeep.toLowerCase().replace(" ", "_"))
         for (const m of config.matchAll(/upkeep:\s*"([^"]+)"/g)) {
-            used.add(m[1].toLowerCase());
+            used.add(m[1].toLowerCase().replace(" ", "_"));
         }
 
         // t("traffic_" + type.toLowerCase())

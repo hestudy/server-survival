@@ -142,8 +142,6 @@ const KO_TRANSLATIONS = {
     "low": "낮음",
     "medium": "보통",
     "high": "높음",
-    "very high": "매우 높음",
-    "very low": "매우 낮음",
     "very_high": "매우 높음",
     "very_low": "매우 낮음",
     "free": "무료",

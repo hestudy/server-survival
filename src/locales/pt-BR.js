@@ -167,8 +167,6 @@ const PT_BR_TRANSLATIONS = {
     "low": "Baixo",
     "medium": "Médio",
     "high": "Alto",
-    "very high": "Muito Alto",
-    "very low": "Muito Baixo",
     "very_high": "Muito Alto",
     "free": "Grátis",
     "current_objectives": "Objetivos Atuais",

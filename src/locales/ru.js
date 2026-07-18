@@ -142,8 +142,6 @@ const RU_TRANSLATIONS = {
     "low": "Низкий",
     "medium": "Средний",
     "high": "Высокий",
-    "very high": "Очень высокий",
-    "very low": "Очень низкий",
     "very_high": "Очень высокий",
     "free": "Бесплатно",
     "current_objectives": "Текущие цели",
